@@ -28,6 +28,15 @@ export JSRECONDUIT_BASE_DIR=~/burp-js-capture
 
 Once loaded, use the **JSReconduit** tab inside Burp to edit settings and view capture logs. Settings are saved to `~/.jsreconduit/config.json` and override environment defaults on startup.
 
+### Screenshots
+
+<img width="1094" height="736" alt="image" src="https://github.com/user-attachments/assets/60479669-e22c-4cd1-b91b-c02371fe2daf" />
+
+<img width="860" height="806" alt="image" src="https://github.com/user-attachments/assets/3ee49b3b-7adc-4e27-bbe9-f36b0121f3b2" />
+
+<img width="464" height="670" alt="image" src="https://github.com/user-attachments/assets/6731aac9-a87b-43e2-9ab0-9d032a2d3665" />
+
+
 #### Performance and behavior tuning
 
 The Burp extension supports environment variables to reduce latency and control output:
