@@ -14,6 +14,7 @@ function serializeFindings(findings: Finding[]): object[] {
     detail: finding.detail,
     filePath: finding.filePath,
     location: finding.location,
+    meta: finding.meta,
   }));
 }
 
@@ -46,6 +47,8 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
   const alertsDir = path.join(interestingDir, "alerts");
   const coverageDir = path.join(interestingDir, "coverage");
   const signaturesDir = path.join(interestingDir, "signatures");
+  const clusterDir = path.join(interestingDir, "clusters");
+  const flowDir = path.join(interestingDir, "flows");
 
   const endpoints = unique(snapshot.endpoints.map((finding) => finding.label));
   const secrets = unique(snapshot.secrets.map((finding) => secretValue(finding)));
@@ -56,6 +59,9 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
   const alerts = snapshot.alerts.map((entry) => `${entry.severity}: ${entry.summary}`);
   const triage = snapshot.triage.map((entry) => `${entry.severity} (${entry.score}) ${entry.url}`);
   const signatures = unique(snapshot.signatures.map((finding) => finding.label));
+  const clusters = snapshot.clusters.map(
+    (cluster) => `${cluster.basePath}\t${cluster.authHint}\t${cluster.endpoints.length}`
+  );
 
   await Promise.all([
     writeTextList(path.join(apiDir, "endpoints.txt"), endpoints),
@@ -108,6 +114,10 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
           `${entry.total}\tE:${entry.endpoints}\tS:${entry.sinks}\tU:${entry.userSinks}\tK:${entry.secrets}\tG:${entry.signatures}\t${entry.label}`
       )
     ),
+    writeTextList(path.join(clusterDir, "clusters.txt"), clusters),
+    writeJson(path.join(clusterDir, "clusters.json"), snapshot.clusters),
+    writeJson(path.join(flowDir, "call-graph.json"), snapshot.callGraph),
+    writeJson(path.join(flowDir, "traces.json"), snapshot.traces),
   ]);
 
   const summary = {
@@ -122,6 +132,9 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
     triage: snapshot.triage.length,
     coverage: snapshot.coverage.coverage.length,
     signatures: signatures.length,
+    clusters: snapshot.clusters.length,
+    traces: snapshot.traces.length,
+    callGraph: snapshot.callGraph.length,
     updatedAt: new Date().toISOString(),
   };
   await writeJson(path.join(interestingDir, "summary.json"), summary);

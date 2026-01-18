@@ -21,6 +21,9 @@ import {
   TriageEntry,
   AlertEntry,
   SignatureRule,
+  EndpointCluster,
+  CallGraphEdge,
+  FlowTrace,
 } from "./types";
 import { logError, log, normalizePath } from "./utils";
 
@@ -117,6 +120,8 @@ export class JSReconduitStore {
     const signatures: Finding[] = [];
     const sourcemaps: { asset: AssetAnalysis; files: string[] }[] = [];
     const wordlist = new Set<string>();
+    const callGraph: CallGraphEdge[] = [];
+    const traces: FlowTrace[] = [];
 
     for (const asset of this.assets) {
       endpoints.push(...asset.analysis.endpoints);
@@ -125,6 +130,8 @@ export class JSReconduitStore {
       frameworks.push(...asset.analysis.frameworks);
       secrets.push(...asset.analysis.secrets);
       signatures.push(...asset.analysis.signatures);
+      callGraph.push(...asset.analysis.callGraph);
+      traces.push(...asset.analysis.traces);
       for (const word of asset.analysis.wordlist) {
         wordlist.add(word);
       }
@@ -138,6 +145,7 @@ export class JSReconduitStore {
     const coverage = this.buildCoverage();
     const triage = this.buildTriage(coverage);
     const alerts = this.buildAlerts(drift);
+    const clusters = this.buildEndpointClusters();
 
     return {
       assets: this.assets,
@@ -152,6 +160,9 @@ export class JSReconduitStore {
       alerts,
       triage,
       coverage,
+      clusters,
+      callGraph,
+      traces,
       sourcemapGraph: this.buildSourcemapGraph(),
       sourcemaps,
       wordlist: Array.from(wordlist).sort(),
@@ -274,6 +285,8 @@ export class JSReconduitStore {
         url,
         fromTimestamp: previous.asset.timestamp,
         toTimestamp: current.asset.timestamp,
+        fromPath: previous.analysisPath,
+        toPath: current.analysisPath,
         added,
       });
     }
@@ -356,6 +369,49 @@ export class JSReconduitStore {
         total: totalEndpoints + totalSinks + totalUserSinks + totalSecrets + totalSignatures,
       },
     };
+  }
+
+  private buildEndpointClusters(): EndpointCluster[] {
+    const clusters = new Map<string, EndpointCluster>();
+    for (const asset of this.assets) {
+      for (const endpoint of asset.analysis.endpoints) {
+        const basePath = this.getBasePath(endpoint.label);
+        const authHint = endpoint.meta && endpoint.meta.auth ? endpoint.meta.auth : "none";
+        const key = `${basePath}::${authHint}`;
+        if (!clusters.has(key)) {
+          clusters.set(key, {
+            basePath,
+            authHint,
+            endpoints: [],
+          });
+        }
+        clusters.get(key)!.endpoints.push(endpoint);
+      }
+    }
+    return Array.from(clusters.values()).sort((a, b) => {
+      const pathCompare = a.basePath.localeCompare(b.basePath);
+      if (pathCompare !== 0) {
+        return pathCompare;
+      }
+      return a.authHint.localeCompare(b.authHint);
+    });
+  }
+
+  private getBasePath(label: string): string {
+    let pathPart = label;
+    try {
+      if (label.startsWith("http://") || label.startsWith("https://")) {
+        pathPart = new URL(label).pathname;
+      }
+    } catch {
+      pathPart = label;
+    }
+    const sanitized = pathPart.split("?")[0].split("#")[0];
+    const segments = sanitized.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return "/";
+    }
+    return "/" + segments.slice(0, Math.min(2, segments.length)).join("/");
   }
 
   private buildTriage(coverage: CoverageSummary): TriageEntry[] {

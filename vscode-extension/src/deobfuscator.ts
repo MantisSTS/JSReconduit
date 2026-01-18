@@ -4,10 +4,11 @@ import { ensureDir } from "./utils";
 
 type DeobfuscatorFn = (input: string) => string;
 
-let cachedDeobfuscator: DeobfuscatorFn | null | undefined;
+let cachedDeobfuscator: DeobfuscatorFn | null = null;
+let deobfuscatorLoaded = false;
 
 function loadDeobfuscator(): DeobfuscatorFn | null {
-  if (cachedDeobfuscator !== undefined) {
+  if (deobfuscatorLoaded) {
     return cachedDeobfuscator;
   }
   try {
@@ -15,27 +16,33 @@ function loadDeobfuscator(): DeobfuscatorFn | null {
     const mod = require("javascript-deobfuscator");
     if (typeof mod === "function") {
       cachedDeobfuscator = mod as DeobfuscatorFn;
+      deobfuscatorLoaded = true;
       return cachedDeobfuscator;
     }
     if (mod && typeof mod.deobfuscate === "function") {
       cachedDeobfuscator = mod.deobfuscate.bind(mod);
+      deobfuscatorLoaded = true;
       return cachedDeobfuscator;
     }
     if (mod && mod.default) {
       if (typeof mod.default === "function") {
         cachedDeobfuscator = mod.default as DeobfuscatorFn;
+        deobfuscatorLoaded = true;
         return cachedDeobfuscator;
       }
       if (typeof mod.default.deobfuscate === "function") {
         cachedDeobfuscator = mod.default.deobfuscate.bind(mod.default);
+        deobfuscatorLoaded = true;
         return cachedDeobfuscator;
       }
     }
   } catch {
     cachedDeobfuscator = null;
+    deobfuscatorLoaded = true;
     return cachedDeobfuscator;
   }
   cachedDeobfuscator = null;
+  deobfuscatorLoaded = true;
   return cachedDeobfuscator;
 }
 

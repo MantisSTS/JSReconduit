@@ -98,25 +98,35 @@ Optional settings:
 1. Start Burp and proxy your target traffic as usual.
 2. JSReconduit will write JS assets to the capture directory.
 3. Open VSCode and enable the JSReconduit extension.
-4. Use the **JSReconduit** sidebar to inspect captured files, routes, drift, alerts, triage, coverage, endpoints, sinks, user sinks, secrets, signatures, frameworks, sourcemaps, and wordlist entries.
+4. Use the **JSReconduit** sidebar to inspect captured files, routes, drift, diffs, alerts, triage, coverage, endpoint clusters, endpoints, sinks, user sinks, secrets, signatures, frameworks, call graph, traces, sourcemaps, and wordlist entries.
 5. Optional: run `JSReconduit: Deobfuscate All Assets`, `JSReconduit: Export Findings (JSON/CSV/SARIF)`, `JSReconduit: Generate Report (Markdown)`, and `JSReconduit: Write Instrumentation Snippet`.
 
 ## Interesting Outputs
 
 The VSCode extension writes curated findings to `interesting/` under the capture directory:
 
-- `interesting/apis/`: extracted `fetch`/XHR/axios/WebSocket endpoints
-- `interesting/routes/`: referer-to-asset mapping
-- `interesting/drift/`: new findings when a URL's JS changes
-- `interesting/alerts/`: drift alerts for new secrets/sinks/endpoints
-- `interesting/triage/`: risk-ranked assets with reasons and scores
-- `interesting/coverage/`: per-asset coverage totals
-- `interesting/secrets/`: high-entropy literals and known key patterns
-- `interesting/sinks/`: sink calls and user-controlled sink heuristics
-- `interesting/signatures/`: signature pack matches
-- `interesting/sourcemaps/`: sourcemap graph with per-source counts
+- `interesting/apis/`: HTTP/WebSocket endpoints from AST calls (`fetch`, `XMLHttpRequest.open`, `axios`, `WebSocket`, `EventSource`). Only string literal URLs are captured.
+- `interesting/routes/`: referer-to-asset mapping from Burp observations (`Referer` header + URL of the JS file).
+- `interesting/drift/`: new findings when the same JS URL changes; compares the most recent two captures for that URL.
+- `interesting/clusters/`: endpoints grouped by base path (first 1–2 path segments) plus auth hints inferred from request options (`headers.authorization`, `x-api-key`, `auth`, `credentials`).
+- `interesting/flows/`: call graph edges (caller → callee) and source→sink traces built from lightweight taint propagation (URL params/storage/DOM sources into sink calls/assignments).
+- `interesting/alerts/`: drift alerts raised when new secrets, user sinks, sinks, or endpoints appear between versions.
+- `interesting/triage/`: risk-ranked assets scored by counts of endpoints, sinks, user sinks, secrets, and signature hits.
+- `interesting/coverage/`: per-asset totals for endpoints/sinks/user sinks/secrets/signatures.
+- `interesting/secrets/`: high-entropy literals or known key prefixes (e.g., `AKIA`, `AIza`, `ghp_`).
+- `interesting/sinks/`: DOM/code execution sinks and user-controlled sink candidates (e.g., `innerHTML`, `setAttribute`, `eval`, `Function`).
+- `interesting/signatures/`: signature pack matches (regex rules from `signatures.json`).
+- `interesting/sourcemaps/`: sourcemap graph with resolved source stats per file.
 
 These files are regenerated on each refresh.
+
+## Diff Viewer
+
+Use the **Diffs** node in the JSReconduit sidebar to open a side-by-side diff of the previous and current versions of an asset. Added endpoints and sinks are highlighted in the right-hand editor.
+
+## Call Graph and Flow Traces
+
+JSReconduit builds a lightweight call graph and source-to-sink traces to surface dataflow paths. Traces are listed in the sidebar and exported under `interesting/flows/`.
 
 ## Deobfuscation
 

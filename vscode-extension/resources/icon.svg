@@ -1,4 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="16" fill="#1c1f24"/>
-  <path d="M30 36h68v12H30zM30 58h52v12H30zM30 80h68v12H30z" fill="#f6f7f9"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0c2b2f"/>
+      <stop offset="100%" stop-color="#0b1a2d"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f2f6f8"/>
+      <stop offset="100%" stop-color="#c9d6dd"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#33d1b7"/>
+      <stop offset="100%" stop-color="#2aa1d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="18" fill="url(#bg)"/>
+  <path d="M64 18 L96 28 V60 C96 84 80 100 64 110 C48 100 32 84 32 60 V28 Z" fill="url(#shield)"/>
+  <path d="M40 36 H88" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M44 80 H84" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="44" cy="36" r="3" fill="#33d1b7"/>
+  <circle cx="84" cy="80" r="3" fill="#2aa1d6"/>
+  <text x="64" y="76" text-anchor="middle" font-family="Fira Sans, Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#0b1a2d">JS</text>
 </svg>

@@ -43,6 +43,7 @@ export interface Finding {
   detail?: string;
   filePath: string;
   location?: Location;
+  meta?: Record<string, string>;
 }
 
 export interface SourcemapResult {
@@ -62,6 +63,8 @@ export interface AnalysisResult {
   secrets: Finding[];
   signatures: Finding[];
   wordlist: Set<string>;
+  callGraph: CallGraphEdge[];
+  traces: FlowTrace[];
 }
 
 export interface AssetAnalysis {
@@ -96,6 +99,9 @@ export interface StoreSnapshot {
   alerts: AlertEntry[];
   triage: TriageEntry[];
   coverage: CoverageSummary;
+  clusters: EndpointCluster[];
+  callGraph: CallGraphEdge[];
+  traces: FlowTrace[];
   sourcemapGraph: SourcemapGraphEntry[];
   sourcemaps: { asset: AssetAnalysis; files: string[] }[];
   wordlist: string[];
@@ -117,6 +123,8 @@ export interface DriftEntry {
   url: string;
   fromTimestamp?: string;
   toTimestamp?: string;
+  fromPath?: string;
+  toPath?: string;
   added: {
     endpoints: Finding[];
     sinks: Finding[];
@@ -125,6 +133,32 @@ export interface DriftEntry {
     paths: Finding[];
     urls: Finding[];
   };
+}
+
+export interface CallGraphEdge {
+  caller: string;
+  callee: string;
+  filePath: string;
+  location?: Location;
+}
+
+export interface FlowEndpoint {
+  label: string;
+  location?: Location;
+  kind?: "source" | "param";
+}
+
+export interface FlowTrace {
+  filePath: string;
+  source: FlowEndpoint;
+  sink: FlowEndpoint;
+  path: string[];
+}
+
+export interface EndpointCluster {
+  basePath: string;
+  authHint: string;
+  endpoints: Finding[];
 }
 
 export interface SourcemapGraphEntry {

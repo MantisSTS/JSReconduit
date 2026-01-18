@@ -24,9 +24,16 @@ burp-js-capture/
       alerts.txt
     coverage/
       coverage.json
+      coverage.txt
+    clusters/
+      clusters.json
+      clusters.txt
     drift/
       drift.json
       drift.txt
+    flows/
+      call-graph.json
+      traces.json
     routes/
       routes.json
       routes.txt

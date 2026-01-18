@@ -126,6 +126,9 @@ export async function exportFindings(
       alerts: snapshot.alerts,
       triage: snapshot.triage,
       coverage: snapshot.coverage,
+      clusters: snapshot.clusters,
+      callGraph: snapshot.callGraph,
+      traces: snapshot.traces,
     };
     await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
     return filePath;

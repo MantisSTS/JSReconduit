@@ -41,6 +41,9 @@ Generated: ${new Date().toISOString()}
 - Signature matches: ${totals.signatures}
 - Drift entries: ${snapshot.drift.length}
 - Alerts: ${snapshot.alerts.length}
+- Endpoint clusters: ${snapshot.clusters.length}
+- Flow traces: ${snapshot.traces.length}
+- Call graph edges: ${snapshot.callGraph.length}
 
 ## Top Triage
 

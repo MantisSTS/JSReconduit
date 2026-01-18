@@ -5,6 +5,7 @@ import { JSReconduitTreeProvider } from "./tree";
 import { exportFindings } from "./exporter";
 import { writeInstrumentationSnippet } from "./instrumentation";
 import { writeReport } from "./report";
+import { DriftEntry } from "./types";
 import { expandHome, logError } from "./utils";
 import { writeWordlist } from "./wordlist";
 
@@ -58,6 +59,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("JSReconduit");
   const store = new JSReconduitStore(output);
   const provider = new JSReconduitTreeProvider(store.snapshot());
+  const diffDecoration = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor("editor.rangeHighlightBackground"),
+    overviewRulerColor: new vscode.ThemeColor("editorOverviewRuler.infoForeground"),
+    overviewRulerLane: vscode.OverviewRulerLane.Right,
+  });
 
   const refresh = async () => {
     const baseDir = getBaseDir();
@@ -118,6 +124,43 @@ export function activate(context: vscode.ExtensionContext): void {
         logError(output, "Failed to open location", error);
       }
     }),
+    vscode.commands.registerCommand("jsreconduit.openDiff", async (drift: DriftEntry) => {
+      try {
+        if (!drift.fromPath || !drift.toPath) {
+          vscode.window.showWarningMessage("JSReconduit: diff paths unavailable for this asset.");
+          return;
+        }
+        const left = vscode.Uri.file(drift.fromPath);
+        const right = vscode.Uri.file(drift.toPath);
+        await vscode.commands.executeCommand(
+          "vscode.diff",
+          left,
+          right,
+          `JSReconduit Diff: ${drift.url}`
+        );
+        const ranges: vscode.Range[] = [];
+        const added = drift.added;
+        const highlightFindings = [...added.endpoints, ...added.sinks, ...added.userSinks];
+        for (const finding of highlightFindings.slice(0, 200)) {
+          if (!finding.location) {
+            continue;
+          }
+          const line = Math.max(finding.location.line - 1, 0);
+          const col = Math.max((finding.location.column || 1) - 1, 0);
+          ranges.push(new vscode.Range(line, col, line, col + 1));
+        }
+        setTimeout(() => {
+          const editors = vscode.window.visibleTextEditors.filter(
+            (editor) => editor.document.uri.fsPath === drift.toPath
+          );
+          for (const editor of editors) {
+            editor.setDecorations(diffDecoration, ranges);
+          }
+        }, 200);
+      } catch (error) {
+        logError(output, "Failed to open diff", error);
+      }
+    }),
     vscode.commands.registerCommand("jsreconduit.exportWordlist", async () => {
       const baseDir = getBaseDir();
       const snapshot = store.snapshot();
@@ -175,6 +218,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  context.subscriptions.push(diffDecoration);
 }
 
 export function deactivate(): void {}

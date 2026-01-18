@@ -20,7 +20,8 @@
     "onCommand:jsreconduit.exportFindingsCsv",
     "onCommand:jsreconduit.exportFindingsSarif",
     "onCommand:jsreconduit.generateReport",
-    "onCommand:jsreconduit.writeSnippet"
+    "onCommand:jsreconduit.writeSnippet",
+    "onCommand:jsreconduit.openDiff"
   ],
   "contributes": {
     "viewsContainers": {
@@ -76,6 +77,10 @@
       {
         "command": "jsreconduit.openLocation",
         "title": "JSReconduit: Open Location"
+      },
+      {
+        "command": "jsreconduit.openDiff",
+        "title": "JSReconduit: Open Diff"
       }
     ],
     "configuration": {
@@ -137,7 +142,7 @@
   "dependencies": {
     "acorn": "^8.11.3",
     "acorn-walk": "^8.3.2",
-    "javascript-deobfuscator": "^0.2.4",
+    "javascript-deobfuscator": "^1.0.3",
     "source-map": "^0.7.4"
   },
   "devDependencies": {
