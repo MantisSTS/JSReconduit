@@ -1,0 +1,148 @@
+{
+  "name": "jsreconduit",
+  "displayName": "JSReconduit",
+  "description": "Burp + VSCode JavaScript reconnaissance bridge for security testing.",
+  "publisher": "local",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:jsreconduit.view",
+    "onCommand:jsreconduit.refresh",
+    "onCommand:jsreconduit.exportWordlist",
+    "onCommand:jsreconduit.deobfuscateAll",
+    "onCommand:jsreconduit.exportFindingsJson",
+    "onCommand:jsreconduit.exportFindingsCsv",
+    "onCommand:jsreconduit.exportFindingsSarif",
+    "onCommand:jsreconduit.generateReport",
+    "onCommand:jsreconduit.writeSnippet"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jsreconduit",
+          "title": "JSReconduit",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "jsreconduit": [
+        {
+          "id": "jsreconduit.view",
+          "name": "JSReconduit"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "jsreconduit.refresh",
+        "title": "JSReconduit: Refresh"
+      },
+      {
+        "command": "jsreconduit.deobfuscateAll",
+        "title": "JSReconduit: Deobfuscate All Assets"
+      },
+      {
+        "command": "jsreconduit.exportWordlist",
+        "title": "JSReconduit: Export Wordlist"
+      },
+      {
+        "command": "jsreconduit.exportFindingsJson",
+        "title": "JSReconduit: Export Findings (JSON)"
+      },
+      {
+        "command": "jsreconduit.exportFindingsCsv",
+        "title": "JSReconduit: Export Findings (CSV)"
+      },
+      {
+        "command": "jsreconduit.exportFindingsSarif",
+        "title": "JSReconduit: Export Findings (SARIF)"
+      },
+      {
+        "command": "jsreconduit.generateReport",
+        "title": "JSReconduit: Generate Report (Markdown)"
+      },
+      {
+        "command": "jsreconduit.writeSnippet",
+        "title": "JSReconduit: Write Instrumentation Snippet"
+      },
+      {
+        "command": "jsreconduit.openLocation",
+        "title": "JSReconduit: Open Location"
+      }
+    ],
+    "configuration": {
+      "title": "JSReconduit",
+      "properties": {
+        "jsreconduit.baseDir": {
+          "type": "string",
+          "default": "~/burp-js-capture",
+          "description": "Directory where the Burp extension writes captured assets and index.json"
+        },
+        "jsreconduit.wordlistPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override path for exported wordlist file"
+        },
+        "jsreconduit.autoWordlist": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically write the wordlist file on refresh"
+        },
+        "jsreconduit.autoDeobfuscate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically deobfuscate assets on refresh"
+        },
+        "jsreconduit.preferDeobfuscated": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prefer deobfuscated files when available"
+        },
+        "jsreconduit.exportDir": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override path for findings exports"
+        },
+        "jsreconduit.reportDir": {
+          "type": "string",
+          "default": "",
+          "description": "Optional override path for report output"
+        },
+        "jsreconduit.signaturePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to signature rules JSON (defaults to <baseDir>/signatures.json)"
+        },
+        "jsreconduit.autoWriteSnippet": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically write the instrumentation snippet on refresh"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "acorn": "^8.11.3",
+    "acorn-walk": "^8.3.2",
+    "javascript-deobfuscator": "^0.2.4",
+    "source-map": "^0.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

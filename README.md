@@ -86,13 +86,20 @@ code --install-extension jsreconduit-0.1.0.vsix
 Optional settings:
 - `jsreconduit.autoWordlist`: automatically write `wordlists/jsreconduit-wordlist.txt` on refresh (default true).
 - `jsreconduit.wordlistPath`: override wordlist output path.
+- `jsreconduit.autoDeobfuscate`: automatically deobfuscate assets on refresh (default false).
+- `jsreconduit.preferDeobfuscated`: prefer deobfuscated files when available (default true).
+- `jsreconduit.exportDir`: override findings export directory.
+- `jsreconduit.reportDir`: override report output directory.
+- `jsreconduit.signaturePath`: override signature rules path (defaults to `<baseDir>/signatures.json`).
+- `jsreconduit.autoWriteSnippet`: automatically write the instrumentation snippet (default true).
 
 ## Usage Workflow
 
 1. Start Burp and proxy your target traffic as usual.
 2. JSReconduit will write JS assets to the capture directory.
 3. Open VSCode and enable the JSReconduit extension.
-4. Use the **JSReconduit** sidebar to inspect captured files, routes, drift, endpoints, sinks, user sinks, secrets, frameworks, sourcemaps, and wordlist entries.
+4. Use the **JSReconduit** sidebar to inspect captured files, routes, drift, alerts, triage, coverage, endpoints, sinks, user sinks, secrets, signatures, frameworks, sourcemaps, and wordlist entries.
+5. Optional: run `JSReconduit: Deobfuscate All Assets`, `JSReconduit: Export Findings (JSON/CSV/SARIF)`, `JSReconduit: Generate Report (Markdown)`, and `JSReconduit: Write Instrumentation Snippet`.
 
 ## Interesting Outputs
 
@@ -101,11 +108,52 @@ The VSCode extension writes curated findings to `interesting/` under the capture
 - `interesting/apis/`: extracted `fetch`/XHR/axios/WebSocket endpoints
 - `interesting/routes/`: referer-to-asset mapping
 - `interesting/drift/`: new findings when a URL's JS changes
+- `interesting/alerts/`: drift alerts for new secrets/sinks/endpoints
+- `interesting/triage/`: risk-ranked assets with reasons and scores
+- `interesting/coverage/`: per-asset coverage totals
 - `interesting/secrets/`: high-entropy literals and known key patterns
 - `interesting/sinks/`: sink calls and user-controlled sink heuristics
+- `interesting/signatures/`: signature pack matches
 - `interesting/sourcemaps/`: sourcemap graph with per-source counts
 
 These files are regenerated on each refresh.
+
+## Deobfuscation
+
+Deobfuscation uses the optional `javascript-deobfuscator` dependency. Install it via:
+
+```bash
+cd vscode-extension
+npm install
+```
+
+Then enable `jsreconduit.autoDeobfuscate` or run the **JSReconduit: Deobfuscate All Assets** command. Outputs are written to `deobfuscated/`.
+
+## Exports
+
+Use the command palette to export findings:
+
+- **JSReconduit: Export Findings (JSON)**
+- **JSReconduit: Export Findings (CSV)**
+- **JSReconduit: Export Findings (SARIF)**
+
+Outputs are written under `exports/` unless `jsreconduit.exportDir` is set.
+
+## Reports
+
+Use the command palette to generate a Markdown report:
+
+- **JSReconduit: Generate Report (Markdown)**
+
+Outputs are written under `reports/` unless `jsreconduit.reportDir` is set.
+
+## Instrumentation Snippet
+
+The extension writes `instrumentation/jsreconduit-snippet.js`. Paste it in the browser console to log runtime `fetch`/XHR/WebSocket calls and DOM sink assignments.
+
+## Signature Packs
+
+Provide a JSON signature file (default: `<baseDir>/signatures.json`) to add custom detections. See `examples/signatures.json` for format.
 
 ## Deduplication and Observations
 

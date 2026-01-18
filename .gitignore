@@ -1,0 +1,27 @@
+# VSCode extension build artifacts
+vscode-extension/node_modules/
+vscode-extension/out/
+vscode-extension/.vscode-test/
+vscode-extension/*.vsix
+
+# Node/npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor/OS
+.DS_Store
+.vscode/
+
+# Codex for tidying
+AGENTS.md
+
+# Local capture outputs (if created inside repo)
+burp-js-capture/
+jsreconduit-data/
