@@ -196,6 +196,60 @@ export function activate(context: vscode.ExtensionContext): void {
       const baseDir = getBaseDir();
       const snippetPath = await writeInstrumentationSnippet(baseDir);
       vscode.window.showInformationMessage(`JSReconduit snippet written to ${snippetPath}`);
+    }),
+    vscode.commands.registerCommand("jsreconduit.goToRoute", async () => {
+      const routes = store.snapshot().routes;
+      if (routes.length === 0) {
+        vscode.window.showInformationMessage("JSReconduit: no routes captured yet.");
+        return;
+      }
+      const pickedRoute = await vscode.window.showQuickPick(
+        routes.map((route) => ({
+          label: route.route,
+          description: `${route.assets.length} assets`,
+          route,
+        })),
+        { placeHolder: "Select a route" }
+      );
+      if (!pickedRoute) {
+        return;
+      }
+      const assets = pickedRoute.route.assets;
+      if (assets.length === 0) {
+        vscode.window.showInformationMessage("JSReconduit: no assets for that route.");
+        return;
+      }
+      const pickedAsset = await vscode.window.showQuickPick(
+        assets.map((asset) => ({
+          label: asset.asset.original_filename || asset.asset.url,
+          description: asset.analysisPath,
+          asset,
+        })),
+        { placeHolder: "Select an asset" }
+      );
+      if (!pickedAsset) {
+        return;
+      }
+      await vscode.commands.executeCommand("jsreconduit.openLocation", pickedAsset.asset.analysisPath, 1, 1);
+    }),
+    vscode.commands.registerCommand("jsreconduit.goToAsset", async () => {
+      const assets = store.snapshot().assets;
+      if (assets.length === 0) {
+        vscode.window.showInformationMessage("JSReconduit: no assets captured yet.");
+        return;
+      }
+      const pickedAsset = await vscode.window.showQuickPick(
+        assets.map((asset) => ({
+          label: asset.asset.original_filename || asset.asset.url,
+          description: asset.analysisPath,
+          asset,
+        })),
+        { placeHolder: "Select an asset" }
+      );
+      if (!pickedAsset) {
+        return;
+      }
+      await vscode.commands.executeCommand("jsreconduit.openLocation", pickedAsset.asset.analysisPath, 1, 1);
     })
   );
 

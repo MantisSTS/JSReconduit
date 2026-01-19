@@ -3,6 +3,8 @@ burp-js-capture/
     3d9f4c9d4cfe6fce7a2a1b8cfb3f2a1c9f0b9f1c63f1b0e5a5a8a0b5b6c6d7e8.js
   beautified/
     3d9f4c9d4cfe6fce7a2a1b8cfb3f2a1c9f0b9f1c63f1b0e5a5a8a0b5b6c6d7e8.js
+  html/
+    3d9f4c9d4cfe6fce7a2a1b8cfb3f2a1c9f0b9f1c63f1b0e5a5a8a0b5b6c6d7e8.html
   deobfuscated/
     3d9f4c9d4cfe6fce7a2a1b8cfb3f2a1c9f0b9f1c63f1b0e5a5a8a0b5b6c6d7e8.js
   instrumentation/
@@ -28,12 +30,60 @@ burp-js-capture/
     clusters/
       clusters.json
       clusters.txt
+    assets/
+      html.json
+      html.txt
+    descriptors/
+      data.json
+      data.txt
+      paths.json
+      paths.txt
+      urls.json
+      urls.txt
+      hostnames.json
+      hostnames.txt
+      extensions.json
+      extensions.txt
+      mime-types.json
+      mime-types.txt
+      regex.json
+      regex.txt
+      graphql.json
+      graphql.txt
+      events.json
+      events.txt
+      location.json
+      location.txt
+      storage.json
+      storage.txt
+      cookies.json
+      cookies.txt
+      document-domain.json
+      document-domain.txt
+      window-name.json
+      window-name.txt
+      window-open.json
+      window-open.txt
+      urlsearchparams.json
+      urlsearchparams.txt
+      rest-client.json
+      rest-client.txt
+      fetch-options.json
+      fetch-options.txt
+      schemas.json
+      schemas.txt
+      dependencies.json
+      dependencies.txt
+      feature-flags.json
+      feature-flags.txt
     drift/
       drift.json
       drift.txt
     flows/
       call-graph.json
+      call-graph.txt
       traces.json
+      traces.txt
     routes/
       routes.json
       routes.txt

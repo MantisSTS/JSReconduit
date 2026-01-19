@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import { URL } from "url";
 import { analyzeJavaScript } from "./analyzer";
 import { deobfuscateAndWrite } from "./deobfuscator";
 import { IndexLoader } from "./indexer";
@@ -24,6 +25,7 @@ import {
   EndpointCluster,
   CallGraphEdge,
   FlowTrace,
+  HtmlAsset,
 } from "./types";
 import { logError, log, normalizePath } from "./utils";
 
@@ -31,6 +33,7 @@ export class JSReconduitStore {
   private output: vscode.OutputChannel;
   private loader: IndexLoader;
   private assets: AssetAnalysis[] = [];
+  private htmlAssets: HtmlAsset[] = [];
 
   constructor(output: vscode.OutputChannel) {
     this.output = output;
@@ -47,6 +50,7 @@ export class JSReconduitStore {
     }
   ): Promise<void> {
     const entries = await this.loader.load(baseDir);
+    const htmlAssets = this.buildHtmlAssets(entries);
     const results: AssetAnalysis[] = [];
     const autoDeobfuscate = options?.autoDeobfuscate ?? false;
     const preferDeobfuscated = options?.preferDeobfuscated ?? false;
@@ -56,7 +60,24 @@ export class JSReconduitStore {
       logError(this.output, message, error)
     );
 
+    const htmlRefMap = this.buildHtmlRefMap(htmlAssets);
     for (const entry of entries) {
+      const assetType = entry.asset_type || "js";
+      if (assetType == "html") {
+        const htmlPath = entry.html_path ? normalizePath(entry.html_path) : "";
+        if (!htmlPath || !fs.existsSync(htmlPath)) {
+          continue;
+        }
+        const analysis = this.emptyAnalysis();
+        const asset: AssetAnalysis = {
+          asset: entry,
+          analysis,
+          analysisPath: htmlPath,
+          htmlReferrers: [],
+        };
+        results.push(asset);
+        continue;
+      }
       const analysisPath = this.pickAnalysisPath(entry, baseDir, preferDeobfuscated);
       if (!analysisPath) {
         continue;
@@ -88,6 +109,7 @@ export class JSReconduitStore {
         asset: entry,
         analysis,
         analysisPath: analysisFilePath,
+        htmlReferrers: htmlRefMap.get(entry.url) || [],
       };
 
       const sourcemap = await resolveSourcemap(entry, sourceContents, baseDir, (message, error) =>
@@ -105,6 +127,7 @@ export class JSReconduitStore {
     }
 
     this.assets = results;
+    this.htmlAssets = htmlAssets;
     await writeInterestingOutputs(baseDir, this.snapshot()).catch((error) =>
       logError(this.output, "Failed to write interesting outputs", error)
     );
@@ -118,6 +141,27 @@ export class JSReconduitStore {
     const frameworks: Finding[] = [];
     const secrets: Finding[] = [];
     const signatures: Finding[] = [];
+    const featureFlags: Finding[] = [];
+    const data: Finding[] = [];
+    const hostnames: Finding[] = [];
+    const extensions: Finding[] = [];
+    const mimeTypes: Finding[] = [];
+    const regexes: Finding[] = [];
+    const graphql: Finding[] = [];
+    const location: Finding[] = [];
+    const storage: Finding[] = [];
+    const cookies: Finding[] = [];
+    const documentDomain: Finding[] = [];
+    const windowName: Finding[] = [];
+    const windowOpen: Finding[] = [];
+    const urlSearchParams: Finding[] = [];
+    const restClient: Finding[] = [];
+    const fetchOptions: Finding[] = [];
+    const schemas: Finding[] = [];
+    const dependencies: Finding[] = [];
+    const events: Finding[] = [];
+    const urls: Finding[] = [];
+    const paths: Finding[] = [];
     const sourcemaps: { asset: AssetAnalysis; files: string[] }[] = [];
     const wordlist = new Set<string>();
     const callGraph: CallGraphEdge[] = [];
@@ -128,8 +172,29 @@ export class JSReconduitStore {
       sinks.push(...asset.analysis.sinks);
       userSinks.push(...asset.analysis.userSinks);
       frameworks.push(...asset.analysis.frameworks);
+      events.push(...asset.analysis.events);
+      urls.push(...asset.analysis.urls);
+      paths.push(...asset.analysis.paths);
       secrets.push(...asset.analysis.secrets);
       signatures.push(...asset.analysis.signatures);
+      featureFlags.push(...asset.analysis.featureFlags);
+      data.push(...asset.analysis.data);
+      hostnames.push(...asset.analysis.hostnames);
+      extensions.push(...asset.analysis.extensions);
+      mimeTypes.push(...asset.analysis.mimeTypes);
+      regexes.push(...asset.analysis.regexes);
+      graphql.push(...asset.analysis.graphql);
+      location.push(...asset.analysis.location);
+      storage.push(...asset.analysis.storage);
+      cookies.push(...asset.analysis.cookies);
+      documentDomain.push(...asset.analysis.documentDomain);
+      windowName.push(...asset.analysis.windowName);
+      windowOpen.push(...asset.analysis.windowOpen);
+      urlSearchParams.push(...asset.analysis.urlSearchParams);
+      restClient.push(...asset.analysis.restClient);
+      fetchOptions.push(...asset.analysis.fetchOptions);
+      schemas.push(...asset.analysis.schemas);
+      dependencies.push(...asset.analysis.dependencies);
       callGraph.push(...asset.analysis.callGraph);
       traces.push(...asset.analysis.traces);
       for (const word of asset.analysis.wordlist) {
@@ -149,10 +214,32 @@ export class JSReconduitStore {
 
     return {
       assets: this.assets,
+      htmlAssets: this.htmlAssets,
+      featureFlags,
+      data,
+      hostnames,
+      extensions,
+      mimeTypes,
+      regexes,
+      graphql,
+      location,
+      storage,
+      cookies,
+      documentDomain,
+      windowName,
+      windowOpen,
+      urlSearchParams,
+      restClient,
+      fetchOptions,
+      schemas,
+      dependencies,
       endpoints,
       sinks,
       userSinks,
       frameworks,
+      events,
+      urls,
+      paths,
       secrets,
       signatures,
       routes,
@@ -369,6 +456,88 @@ export class JSReconduitStore {
         total: totalEndpoints + totalSinks + totalUserSinks + totalSecrets + totalSignatures,
       },
     };
+  }
+
+  private emptyAnalysis(): ReturnType<typeof analyzeJavaScript> {
+    return {
+      data: [],
+      hostnames: [],
+      extensions: [],
+      mimeTypes: [],
+      regexes: [],
+      graphql: [],
+      location: [],
+      storage: [],
+      cookies: [],
+      documentDomain: [],
+      windowName: [],
+      windowOpen: [],
+      urlSearchParams: [],
+      restClient: [],
+      fetchOptions: [],
+      schemas: [],
+      dependencies: [],
+      featureFlags: [],
+      endpoints: [],
+      sinks: [],
+      userSinks: [],
+      frameworks: [],
+      events: [],
+      urls: [],
+      paths: [],
+      secrets: [],
+      signatures: [],
+      wordlist: new Set<string>(),
+      callGraph: [],
+      traces: [],
+    };
+  }
+
+  private buildHtmlAssets(entries: AssetIndexEntry[]): HtmlAsset[] {
+    const htmlAssets: HtmlAsset[] = [];
+    for (const entry of entries) {
+      if (entry.asset_type !== "html") {
+        continue;
+      }
+      const htmlPath = entry.html_path ? normalizePath(entry.html_path) : "";
+      if (!htmlPath) {
+        continue;
+      }
+      htmlAssets.push({
+        asset: entry,
+        htmlPath,
+        scriptSrcs: entry.script_srcs || [],
+        inlineScripts: entry.inline_script_count || 0,
+      });
+    }
+    htmlAssets.sort((a, b) => (a.asset.url || "").localeCompare(b.asset.url || ""));
+    return htmlAssets;
+  }
+
+  private buildHtmlRefMap(htmlAssets: HtmlAsset[]): Map<string, string[]> {
+    const refMap = new Map<string, Set<string>>();
+    for (const html of htmlAssets) {
+      const baseUrl = html.asset.url || "";
+      for (const script of html.scriptSrcs) {
+        let resolved = script;
+        if (baseUrl) {
+          try {
+            resolved = new URL(script, baseUrl).toString();
+          } catch {
+            resolved = script;
+          }
+        }
+        if (!refMap.has(resolved)) {
+          refMap.set(resolved, new Set());
+        }
+        refMap.get(resolved)!.add(baseUrl);
+      }
+    }
+    const flattened = new Map<string, string[]>();
+    for (const [key, values] of refMap.entries()) {
+      flattened.set(key, Array.from(values).sort());
+    }
+    return flattened;
   }
 
   private buildEndpointClusters(): EndpointCluster[] {

@@ -33,6 +33,7 @@ Generated: ${new Date().toISOString()}
 ## Summary
 
 - Assets analyzed: ${snapshot.assets.length}
+- HTML assets: ${snapshot.htmlAssets.length}
 - Routes mapped: ${snapshot.routes.length}
 - Endpoints: ${totals.endpoints}
 - Sinks: ${totals.sinks}

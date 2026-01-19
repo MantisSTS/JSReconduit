@@ -21,7 +21,9 @@
     "onCommand:jsreconduit.exportFindingsSarif",
     "onCommand:jsreconduit.generateReport",
     "onCommand:jsreconduit.writeSnippet",
-    "onCommand:jsreconduit.openDiff"
+    "onCommand:jsreconduit.openDiff",
+    "onCommand:jsreconduit.goToRoute",
+    "onCommand:jsreconduit.goToAsset"
   ],
   "contributes": {
     "viewsContainers": {
@@ -81,6 +83,14 @@
       {
         "command": "jsreconduit.openDiff",
         "title": "JSReconduit: Open Diff"
+      },
+      {
+        "command": "jsreconduit.goToRoute",
+        "title": "JSReconduit: Go To Route"
+      },
+      {
+        "command": "jsreconduit.goToAsset",
+        "title": "JSReconduit: Go To Asset"
       }
     ],
     "configuration": {

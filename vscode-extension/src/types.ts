@@ -1,4 +1,22 @@
 export type FindingKind =
+  | "feature_flag"
+  | "data"
+  | "hostname"
+  | "extension"
+  | "mime"
+  | "regex"
+  | "graphql"
+  | "location"
+  | "storage"
+  | "cookie"
+  | "document_domain"
+  | "window_name"
+  | "window_open"
+  | "urlsearchparams"
+  | "rest_client"
+  | "fetch_options"
+  | "schema"
+  | "dependency"
   | "endpoint"
   | "sink"
   | "user_sink"
@@ -21,6 +39,7 @@ export interface AssetIndexEntry {
   status_code: number;
   timestamp: string;
   content_type: string;
+  asset_type?: "js" | "html";
   referer?: string;
   host?: string;
   path?: string;
@@ -34,6 +53,11 @@ export interface AssetIndexEntry {
   beautified_path?: string;
   sourcemap_path?: string;
   resolved_dir?: string;
+  html_path?: string;
+  script_srcs?: string[];
+  inline_script_count?: number;
+  discovered_from?: string;
+  chunk_candidates?: string[];
   observations?: Observation[];
 }
 
@@ -53,6 +77,24 @@ export interface SourcemapResult {
 }
 
 export interface AnalysisResult {
+  featureFlags: Finding[];
+  data: Finding[];
+  hostnames: Finding[];
+  extensions: Finding[];
+  mimeTypes: Finding[];
+  regexes: Finding[];
+  graphql: Finding[];
+  location: Finding[];
+  storage: Finding[];
+  cookies: Finding[];
+  documentDomain: Finding[];
+  windowName: Finding[];
+  windowOpen: Finding[];
+  urlSearchParams: Finding[];
+  restClient: Finding[];
+  fetchOptions: Finding[];
+  schemas: Finding[];
+  dependencies: Finding[];
   endpoints: Finding[];
   sinks: Finding[];
   userSinks: Finding[];
@@ -72,6 +114,7 @@ export interface AssetAnalysis {
   analysis: AnalysisResult;
   analysisPath: string;
   sourcemap?: SourcemapResult;
+  htmlReferrers?: string[];
 }
 
 export interface Observation {
@@ -88,10 +131,32 @@ export interface Observation {
 
 export interface StoreSnapshot {
   assets: AssetAnalysis[];
+  htmlAssets: HtmlAsset[];
+  featureFlags: Finding[];
+  data: Finding[];
+  hostnames: Finding[];
+  extensions: Finding[];
+  mimeTypes: Finding[];
+  regexes: Finding[];
+  graphql: Finding[];
+  location: Finding[];
+  storage: Finding[];
+  cookies: Finding[];
+  documentDomain: Finding[];
+  windowName: Finding[];
+  windowOpen: Finding[];
+  urlSearchParams: Finding[];
+  restClient: Finding[];
+  fetchOptions: Finding[];
+  schemas: Finding[];
+  dependencies: Finding[];
   endpoints: Finding[];
   sinks: Finding[];
   userSinks: Finding[];
   frameworks: Finding[];
+  events: Finding[];
+  urls: Finding[];
+  paths: Finding[];
   secrets: Finding[];
   signatures: Finding[];
   routes: RouteEntry[];
@@ -105,6 +170,13 @@ export interface StoreSnapshot {
   sourcemapGraph: SourcemapGraphEntry[];
   sourcemaps: { asset: AssetAnalysis; files: string[] }[];
   wordlist: string[];
+}
+
+export interface HtmlAsset {
+  asset: AssetIndexEntry;
+  htmlPath: string;
+  scriptSrcs: string[];
+  inlineScripts: number;
 }
 
 export interface SourcemapStats {

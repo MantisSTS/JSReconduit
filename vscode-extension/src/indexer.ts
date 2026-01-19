@@ -46,13 +46,19 @@ export class ProjectWatcher {
     await ensureDir(this.baseDir);
     await ensureDir(path.join(this.baseDir, "raw"));
     await ensureDir(path.join(this.baseDir, "beautified"));
+    await ensureDir(path.join(this.baseDir, "html"));
     await ensureDir(path.join(this.baseDir, "sourcemaps"));
     await ensureDir(path.join(this.baseDir, "resolved"));
     const indexPath = path.join(this.baseDir, "index.json");
     if (!fs.existsSync(indexPath)) {
       await fs.promises.writeFile(indexPath, "[]", "utf8");
     }
-    const watchTargets = [indexPath, path.join(this.baseDir, "raw"), path.join(this.baseDir, "beautified")];
+    const watchTargets = [
+      indexPath,
+      path.join(this.baseDir, "raw"),
+      path.join(this.baseDir, "beautified"),
+      path.join(this.baseDir, "html"),
+    ];
 
     for (const target of watchTargets) {
       try {

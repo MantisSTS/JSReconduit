@@ -23,6 +23,7 @@ from javax.swing import (
     JTabbedPane,
     SwingUtilities,
 )
+from java.net import URL
 try:
     from Queue import Queue, Full
 except Exception:
@@ -56,6 +57,11 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self.enable_sourcemap = os.getenv("JSRECONDUIT_ENABLE_SOURCEMAP", "1").lower() in ["1", "true", "yes"]
         self.always_beautify = os.getenv("JSRECONDUIT_ALWAYS_BEAUTIFY", "").lower() in ["1", "true", "yes"]
         self.only_in_scope = os.getenv("JSRECONDUIT_ONLY_IN_SCOPE", "").lower() in ["1", "true", "yes"]
+        self.capture_html = os.getenv("JSRECONDUIT_CAPTURE_HTML", "1").lower() in ["1", "true", "yes"]
+        self.enable_chunk_discovery = os.getenv("JSRECONDUIT_ENABLE_CHUNK_DISCOVERY", "1").lower() in ["1", "true", "yes"]
+        self.enable_chunk_fetch = os.getenv("JSRECONDUIT_ENABLE_CHUNK_FETCH", "").lower() in ["1", "true", "yes"]
+        self.chunk_fetch_limit = int(os.getenv("JSRECONDUIT_CHUNK_FETCH_LIMIT", "40"))
+        self.chunk_same_origin = os.getenv("JSRECONDUIT_CHUNK_SAME_ORIGIN", "1").lower() in ["1", "true", "yes"]
         disable_beautify = os.getenv("JSRECONDUIT_DISABLE_BEAUTIFY", "").lower() in ["1", "true", "yes"]
         if disable_beautify:
             self.beautify_enabled = False
@@ -64,6 +70,7 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self._lock = threading.Lock()
         self._index_cache = None
         self._index_by_hash = {}
+        self._discovered_urls = set()
         self.queue = None
         self.worker = None
 
@@ -79,7 +86,14 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self._ensure_worker()
 
     def _ensure_dirs(self):
-        for path in [self.base_dir, self.raw_dir, self.beautified_dir, self.sourcemaps_dir, self.resolved_dir]:
+        for path in [
+            self.base_dir,
+            self.raw_dir,
+            self.beautified_dir,
+            self.sourcemaps_dir,
+            self.resolved_dir,
+            self.html_dir,
+        ]:
             if not os.path.isdir(path):
                 os.makedirs(path)
 
@@ -89,6 +103,7 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self.beautified_dir = os.path.join(self.base_dir, "beautified")
         self.sourcemaps_dir = os.path.join(self.base_dir, "sourcemaps")
         self.resolved_dir = os.path.join(self.base_dir, "resolved")
+        self.html_dir = os.path.join(self.base_dir, "html")
         self.index_path = os.path.join(self.base_dir, "index.json")
         self._index_cache = None
         self._index_by_hash = {}
@@ -143,8 +158,23 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self.ui_scope_checkbox = JCheckBox("Only capture in-scope", self.only_in_scope)
         add_row("", self.ui_scope_checkbox)
 
+        self.ui_html_checkbox = JCheckBox("Capture HTML assets", self.capture_html)
+        add_row("", self.ui_html_checkbox)
+
         self.ui_sourcemap_checkbox = JCheckBox("Enable sourcemap handling", self.enable_sourcemap)
         add_row("", self.ui_sourcemap_checkbox)
+
+        self.ui_chunk_discovery_checkbox = JCheckBox("Enable chunk discovery", self.enable_chunk_discovery)
+        add_row("", self.ui_chunk_discovery_checkbox)
+
+        self.ui_chunk_fetch_checkbox = JCheckBox("Enable chunk fetch (active)", self.enable_chunk_fetch)
+        add_row("", self.ui_chunk_fetch_checkbox)
+
+        self.ui_chunk_limit_field = JTextField(str(self.chunk_fetch_limit), 10)
+        add_row("Chunk fetch limit", self.ui_chunk_limit_field)
+
+        self.ui_chunk_scope_checkbox = JCheckBox("Chunk fetch same origin", self.chunk_same_origin)
+        add_row("", self.ui_chunk_scope_checkbox)
 
         self.ui_disable_beautify_checkbox = JCheckBox("Disable beautify", not self.beautify_enabled)
         add_row("", self.ui_disable_beautify_checkbox)
@@ -243,6 +273,11 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self.always_beautify = bool(config.get("always_beautify", self.always_beautify))
         self.debug = bool(config.get("debug", self.debug))
         self.only_in_scope = bool(config.get("only_in_scope", self.only_in_scope))
+        self.capture_html = bool(config.get("capture_html", self.capture_html))
+        self.enable_chunk_discovery = bool(config.get("enable_chunk_discovery", self.enable_chunk_discovery))
+        self.enable_chunk_fetch = bool(config.get("enable_chunk_fetch", self.enable_chunk_fetch))
+        self.chunk_fetch_limit = int(config.get("chunk_fetch_limit", self.chunk_fetch_limit))
+        self.chunk_same_origin = bool(config.get("chunk_same_origin", self.chunk_same_origin))
 
         disable_beautify = bool(config.get("disable_beautify", False))
         if disable_beautify or jsbeautifier is None:
@@ -265,7 +300,12 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         config["queue_max"] = self._parse_int(self.ui_queue_field.getText(), self.queue_max)
         config["heuristic_bytes"] = self._parse_int(self.ui_heuristic_field.getText(), self.heuristic_bytes)
         config["only_in_scope"] = self.ui_scope_checkbox.isSelected()
+        config["capture_html"] = self.ui_html_checkbox.isSelected()
         config["enable_sourcemap"] = self.ui_sourcemap_checkbox.isSelected()
+        config["enable_chunk_discovery"] = self.ui_chunk_discovery_checkbox.isSelected()
+        config["enable_chunk_fetch"] = self.ui_chunk_fetch_checkbox.isSelected()
+        config["chunk_fetch_limit"] = self._parse_int(self.ui_chunk_limit_field.getText(), self.chunk_fetch_limit)
+        config["chunk_same_origin"] = self.ui_chunk_scope_checkbox.isSelected()
         config["disable_beautify"] = self.ui_disable_beautify_checkbox.isSelected()
         config["always_beautify"] = self.ui_always_beautify_checkbox.isSelected()
         config["pretty_index"] = self.ui_pretty_checkbox.isSelected()
@@ -287,7 +327,12 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         self.ui_queue_field.setText(str(self.queue_max))
         self.ui_heuristic_field.setText(str(self.heuristic_bytes))
         self.ui_scope_checkbox.setSelected(self.only_in_scope)
+        self.ui_html_checkbox.setSelected(self.capture_html)
         self.ui_sourcemap_checkbox.setSelected(self.enable_sourcemap)
+        self.ui_chunk_discovery_checkbox.setSelected(self.enable_chunk_discovery)
+        self.ui_chunk_fetch_checkbox.setSelected(self.enable_chunk_fetch)
+        self.ui_chunk_limit_field.setText(str(self.chunk_fetch_limit))
+        self.ui_chunk_scope_checkbox.setSelected(self.chunk_same_origin)
         self.ui_disable_beautify_checkbox.setSelected(not self.beautify_enabled)
         self.ui_always_beautify_checkbox.setSelected(self.always_beautify)
         self.ui_pretty_checkbox.setSelected(self.pretty_index)
@@ -327,7 +372,9 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         for entry in data:
             sha = entry.get("sha256")
             if sha:
-                self._index_by_hash[sha] = entry
+                asset_type = entry.get("asset_type", "js")
+                key = self._hash_key(asset_type, sha)
+                self._index_by_hash[key] = entry
 
     def _enqueue_capture(self, job):
         if self.queue is None:
@@ -361,11 +408,15 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         host = job.get("host") or ""
         path = job.get("path") or ""
         body_bytes = self._coerce_bytes(job.get("body_bytes"))
+        asset_type = job.get("asset_type", "js")
+        discovered_from = job.get("discovered_from", "")
+        skip_chunk_discovery = bool(job.get("skip_chunk_discovery", False))
         body_hash = self._sha256(body_bytes)
 
         with self._lock:
             self._load_index_cache()
-            existing = self._index_by_hash.get(body_hash)
+            key = self._hash_key(asset_type, body_hash)
+            existing = self._index_by_hash.get(key)
             if existing:
                 self._update_observations(existing, str(url), method, status_code, content_type, referer, host, path)
                 self._write_index_cache()
@@ -376,6 +427,31 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                 return
 
         raw_name = self._build_base_name(body_hash, url, method)
+        if asset_type == "html":
+            html_path = self._write_file(self.html_dir, raw_name, ".html", body_bytes)
+            body_text = self.helpers.bytesToString(body_bytes)
+            script_srcs, inline_count = self._extract_script_srcs(body_text)
+            entry = {
+                "url": str(url),
+                "method": method,
+                "status_code": status_code,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "content_type": content_type,
+                "referer": referer,
+                "host": host,
+                "path": path,
+                "original_filename": self._infer_filename(url),
+                "sha256": body_hash,
+                "asset_type": "html",
+                "html_path": html_path,
+                "script_srcs": script_srcs,
+                "inline_script_count": inline_count,
+            }
+            self._append_index(entry)
+            if self.debug:
+                self._log("JSReconduit: indexed %s" % html_path, to_output=True)
+            return
+
         raw_path = self._write_file(self.raw_dir, raw_name, ".js", body_bytes)
         if self.debug:
             self._log("JSReconduit: wrote raw %s" % raw_path, to_output=True)
@@ -383,7 +459,7 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
             self._log("Captured %s" % raw_path, to_output=False)
 
         body_text = None
-        if self.beautify_enabled or self.enable_sourcemap:
+        if self.beautify_enabled or self.enable_sourcemap or self.enable_chunk_discovery:
             body_text = self.helpers.bytesToString(body_bytes)
 
         beautified_path = None
@@ -403,6 +479,15 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         if self.enable_sourcemap and body_text:
             sourcemap_ref, sourcemap_path = self._handle_sourcemap(body_text, str(url), raw_name)
 
+        chunk_candidates = []
+        if self.enable_chunk_discovery and body_text and not skip_chunk_discovery:
+            try:
+                chunk_candidates = self._discover_chunks(body_text, url)
+                if chunk_candidates and self.debug:
+                    self._log("JSReconduit: discovered %d chunk candidates" % len(chunk_candidates), to_output=True)
+            except Exception as exc:
+                self._log("JSReconduit chunk discovery error: %s" % str(exc), is_error=True)
+
         entry = {
             "url": str(url),
             "method": method,
@@ -414,16 +499,22 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
             "path": path,
             "original_filename": self._infer_filename(url),
             "sha256": body_hash,
+            "asset_type": "js",
             "sourcemap_ref": sourcemap_ref,
             "raw_path": raw_path,
             "beautified_path": beautified_path,
             "sourcemap_path": sourcemap_path,
             "resolved_dir": self.resolved_dir,
+            "discovered_from": discovered_from,
+            "chunk_candidates": chunk_candidates,
         }
 
         self._append_index(entry)
         if self.debug:
             self._log("JSReconduit: indexed %s" % raw_path, to_output=True)
+
+        if self.enable_chunk_fetch and chunk_candidates:
+            self._fetch_chunk_candidates(chunk_candidates, url, referer=str(url))
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
         if messageIsRequest:
@@ -457,6 +548,16 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
             if self.debug:
                 self._log("JSReconduit: saw %s %s (%s)" % (method, url, content_type), to_output=True)
 
+            path_lower = ""
+            try:
+                path_lower = url.getPath().lower()
+            except Exception:
+                path_lower = ""
+            if (content_type and "css" in content_type.lower()) or (path_lower and path_lower.endswith(".css")):
+                if self.debug:
+                    self._log("JSReconduit: skip %s (css)" % url, to_output=True)
+                return
+
             if self.only_in_scope:
                 in_scope = False
                 try:
@@ -468,6 +569,7 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                         self._log("JSReconduit: skip %s (out of scope)" % url, to_output=True)
                     return
 
+            asset_type = "js"
             should_capture = False
             if content_type and "javascript" in content_type.lower():
                 should_capture = True
@@ -483,12 +585,32 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                 sample_end = min(len(response), body_offset + self.heuristic_bytes)
                 sample_bytes = response[body_offset:sample_end]
                 sample_text = self.helpers.bytesToString(sample_bytes)
-                if self._looks_like_js(sample_text):
+                if not self._is_html_path(path) and self._looks_like_js(sample_text):
                     should_capture = True
+
+            if not should_capture and self.capture_html:
+                if content_type and ("text/html" in content_type.lower() or "application/xhtml" in content_type.lower()):
+                    should_capture = True
+                    asset_type = "html"
+                else:
+                    try:
+                        path = url.getPath()
+                        if path and self._is_html_path(path):
+                            should_capture = True
+                            asset_type = "html"
+                    except Exception:
+                        pass
+                if not should_capture:
+                    sample_end = min(len(response), body_offset + self.heuristic_bytes)
+                    sample_bytes = response[body_offset:sample_end]
+                    sample_text = self.helpers.bytesToString(sample_bytes)
+                    if self._looks_like_html(sample_text):
+                        should_capture = True
+                        asset_type = "html"
 
             if not should_capture:
                 if self.debug:
-                    self._log("JSReconduit: skip %s (not JS)" % url, to_output=True)
+                    self._log("JSReconduit: skip %s (not JS/HTML)" % url, to_output=True)
                 return
 
             job = {
@@ -500,6 +622,7 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                 "referer": referer,
                 "host": host,
                 "path": path,
+                "asset_type": asset_type,
             }
 
             if self.async_enabled:
@@ -519,12 +642,18 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         return ""
 
     def _is_javascript(self, content_type, url, body_text):
+        if content_type and "css" in content_type.lower():
+            return False
         if content_type and "javascript" in content_type.lower():
             return True
         try:
             path = url.getPath()
-            if path and path.lower().endswith(".js"):
+            if path and (path.lower().endswith(".js") or path.lower().endswith(".mjs")):
                 return True
+            if path and path.lower().endswith(".css"):
+                return False
+            if path and self._is_html_path(path):
+                return False
         except Exception:
             pass
 
@@ -534,6 +663,11 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
         sample = body_text[:10000]
         if not sample:
             return False
+        lower = sample.lower()
+        if "<!doctype html" in lower or "<html" in lower:
+            return False
+        if "<head" in lower and "<body" in lower:
+            return False
         keywords = ["function", "=>", "var ", "let ", "const ", "import ", "export ", "require(", "define("]
         score = 0
         for kw in keywords:
@@ -541,8 +675,26 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                 score += 1
         if score >= 2:
             return True
-        if "{" in sample and "}" in sample and ";" in sample:
+        return False
+
+    def _looks_like_html(self, body_text):
+        sample = body_text[:10000].lower()
+        if not sample:
+            return False
+        if "<!doctype html" in sample or "<html" in sample:
             return True
+        if "<head" in sample and "<body" in sample:
+            return True
+        if "<script" in sample and "</script" in sample:
+            return True
+        return False
+
+    def _is_html_path(self, path):
+        lower = path.lower()
+        html_exts = [".html", ".htm", ".jsp", ".jspx", ".jspf", ".php", ".asp", ".aspx"]
+        for ext in html_exts:
+            if lower.endswith(ext):
+                return True
         return False
 
     def _is_minified(self, body_text):
@@ -571,6 +723,9 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
 
     def _sha256(self, body_bytes):
         return hashlib.sha256(self._coerce_bytes(body_bytes)).hexdigest()
+
+    def _hash_key(self, asset_type, body_hash):
+        return "%s:%s" % (asset_type or "js", body_hash)
 
     def _build_base_name(self, body_hash, url, method):
         slug = self._slugify_url(url, method)
@@ -630,6 +785,136 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
             return str(data)
         except Exception:
             return ""
+
+    def _extract_script_srcs(self, html_text):
+        if not html_text:
+            return [], 0
+        srcs = []
+        inline_count = 0
+        try:
+            for match in re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", html_text, re.IGNORECASE):
+                if match:
+                    srcs.append(match.strip())
+            for match in re.findall(r"<script(?![^>]+src=)[^>]*>", html_text, re.IGNORECASE):
+                inline_count += 1
+        except Exception:
+            pass
+        return srcs, inline_count
+
+    def _resolve_url(self, base_url, candidate):
+        try:
+            if candidate.startswith("http://") or candidate.startswith("https://"):
+                return candidate
+            if candidate.startswith("//"):
+                return "%s:%s" % (base_url.getProtocol(), candidate)
+            return URL(base_url, candidate).toString()
+        except Exception:
+            return ""
+
+    def _same_origin(self, base_url, candidate_url):
+        try:
+            other = URL(candidate_url)
+        except Exception:
+            return False
+        try:
+            def norm_port(u):
+                port = u.getPort()
+                if port != -1:
+                    return port
+                return 443 if u.getProtocol().lower() == "https" else 80
+            return (
+                base_url.getProtocol().lower() == other.getProtocol().lower()
+                and base_url.getHost().lower() == other.getHost().lower()
+                and (norm_port(base_url) == norm_port(other))
+            )
+        except Exception:
+            return False
+
+    def _discover_chunks(self, body_text, base_url):
+        candidates = set()
+        if not body_text:
+            return []
+        chunk_names = re.findall(r"webpackChunkName\\s*:\\s*[\"']([^\"']+)[\"']", body_text)
+        for name in chunk_names:
+            candidates.add("%s.js" % name)
+            candidates.add("%s.chunk.js" % name)
+            candidates.add("static/js/%s.js" % name)
+            candidates.add("static/js/%s.chunk.js" % name)
+
+        for match in re.findall(r"__webpack_require__\\.e\\(\\s*([0-9]+|[\"'][^\"']+[\"'])\\s*\\)", body_text):
+            chunk_id = match.strip("\"'")
+            candidates.add("%s.js" % chunk_id)
+            candidates.add("%s.chunk.js" % chunk_id)
+            candidates.add("static/js/%s.js" % chunk_id)
+            candidates.add("static/js/%s.chunk.js" % chunk_id)
+
+        for match in re.findall(r"[\"']([^\"']+\\.js(?:\\?[^\"']*)?)[\"']", body_text):
+            if "chunk" in match or "static/js" in match or "webpack" in match or "lazy" in match:
+                candidates.add(match)
+
+        resolved = []
+        for candidate in candidates:
+            resolved_url = self._resolve_url(base_url, candidate)
+            if resolved_url:
+                resolved.append(resolved_url)
+        return list(sorted(set(resolved)))
+
+    def _fetch_chunk_candidates(self, candidates, base_url, referer=""):
+        count = 0
+        for candidate in candidates:
+            if count >= self.chunk_fetch_limit:
+                break
+            if candidate in self._discovered_urls:
+                continue
+            if self.chunk_same_origin and not self._same_origin(base_url, candidate):
+                continue
+            self._discovered_urls.add(candidate)
+            if self._fetch_and_capture(candidate, base_url, referer):
+                count += 1
+        if count and self.debug:
+            self._log("JSReconduit: fetched %d chunk candidates" % count, to_output=True)
+
+    def _fetch_and_capture(self, candidate_url, base_url, referer=""):
+        try:
+            url = URL(candidate_url)
+            request = self.helpers.buildHttpRequest(url)
+            use_https = url.getProtocol().lower() == "https"
+            port = url.getPort()
+            if port == -1:
+                port = 443 if use_https else 80
+            response_obj = self.callbacks.makeHttpRequest(url.getHost(), port, use_https, request)
+            response = response_obj.getResponse()
+            if response is None:
+                return False
+            response_info = self.helpers.analyzeResponse(response)
+            headers = response_info.getHeaders()
+            status_code = response_info.getStatusCode()
+            body_offset = response_info.getBodyOffset()
+            body_bytes = response[body_offset:]
+            content_type = self._get_header(headers, "Content-Type")
+            sample_text = self.helpers.bytesToString(body_bytes[: min(len(body_bytes), self.heuristic_bytes)])
+            if not self._is_javascript(content_type, url, sample_text):
+                return False
+            job = {
+                "url": url,
+                "method": "GET",
+                "status_code": status_code,
+                "content_type": content_type,
+                "body_bytes": body_bytes,
+                "referer": referer,
+                "host": url.getHost(),
+                "path": url.getPath(),
+                "asset_type": "js",
+                "discovered_from": str(base_url),
+                "skip_chunk_discovery": True,
+            }
+            self._process_capture(job)
+            return True
+        except Exception as exc:
+            self._log("JSReconduit chunk fetch error: %s" % str(exc), is_error=True)
+            if self.debug:
+                self._log(traceback.format_exc(), is_error=True)
+            return False
 
     def _unique_path(self, directory, base_name, ext):
         candidate = os.path.join(directory, base_name + ext)
@@ -706,7 +991,9 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
             self._index_cache = data
             sha = entry.get("sha256")
             if sha:
-                self._index_by_hash[sha] = entry
+                asset_type = entry.get("asset_type", "js")
+                key = self._hash_key(asset_type, sha)
+                self._index_by_hash[key] = entry
             self._write_index_cache()
 
     def _write_index_cache(self):

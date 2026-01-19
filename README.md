@@ -50,6 +50,11 @@ The Burp extension supports environment variables to reduce latency and control 
 - `JSRECONDUIT_PRETTY_INDEX=1`: pretty JSON output (slower).
 - `JSRECONDUIT_DEBUG=1`: verbose debug logging in Burp output.
 - `JSRECONDUIT_ONLY_IN_SCOPE=1`: only capture URLs that are in Burp scope.
+- `JSRECONDUIT_CAPTURE_HTML=1`: capture HTML responses (default on).
+- `JSRECONDUIT_ENABLE_CHUNK_DISCOVERY=1`: extract lazy chunk candidates from JS (default on).
+- `JSRECONDUIT_ENABLE_CHUNK_FETCH=0`: actively fetch chunk candidates (default off).
+- `JSRECONDUIT_CHUNK_FETCH_LIMIT=40`: max chunk fetches per JS asset.
+- `JSRECONDUIT_CHUNK_SAME_ORIGIN=1`: only fetch chunks from the same origin.
 
 Example:
 
@@ -107,8 +112,8 @@ Optional settings:
 1. Start Burp and proxy your target traffic as usual.
 2. JSReconduit will write JS assets to the capture directory.
 3. Open VSCode and enable the JSReconduit extension.
-4. Use the **JSReconduit** sidebar to inspect captured files, routes, drift, diffs, alerts, triage, coverage, endpoint clusters, endpoints, sinks, user sinks, secrets, signatures, frameworks, call graph, traces, sourcemaps, and wordlist entries.
-5. Optional: run `JSReconduit: Deobfuscate All Assets`, `JSReconduit: Export Findings (JSON/CSV/SARIF)`, `JSReconduit: Generate Report (Markdown)`, and `JSReconduit: Write Instrumentation Snippet`.
+4. Use the **JSReconduit** sidebar to inspect captured files, HTML assets, routes, drift, diffs, alerts, triage, coverage, endpoint clusters, endpoints, sinks, user sinks, secrets, signatures, frameworks, call graph, traces, sourcemaps, and wordlist entries.
+5. Optional: run `JSReconduit: Go To Route`, `JSReconduit: Go To Asset`, `JSReconduit: Deobfuscate All Assets`, `JSReconduit: Export Findings (JSON/CSV/SARIF)`, `JSReconduit: Generate Report (Markdown)`, and `JSReconduit: Write Instrumentation Snippet`.
 
 ## Interesting Outputs
 
@@ -119,23 +124,42 @@ The VSCode extension writes curated findings to `interesting/` under the capture
 - `interesting/drift/`: new findings when the same JS URL changes; compares the most recent two captures for that URL.
 - `interesting/clusters/`: endpoints grouped by base path (first 1–2 path segments) plus auth hints inferred from request options (`headers.authorization`, `x-api-key`, `auth`, `credentials`).
 - `interesting/flows/`: call graph edges (caller → callee) and source→sink traces built from lightweight taint propagation (URL params/storage/DOM sources into sink calls/assignments).
+- `interesting/descriptors/`: static descriptors (paths/URLs/hostnames/extensions/MIME types), regex patterns/matches, GraphQL queries, client behavior (location/cookies/storage/window.open/URLSearchParams), rest-client calls, fetch options, schemas, and dependency package names.
+- `interesting/descriptors/feature-flags.*`: feature flag names inferred from config objects, flag helper calls, and flag-related member paths.
+- `interesting/assets/`: captured HTML summaries (script counts and srcs).
 - `interesting/alerts/`: drift alerts raised when new secrets, user sinks, sinks, or endpoints appear between versions.
 - `interesting/triage/`: risk-ranked assets scored by counts of endpoints, sinks, user sinks, secrets, and signature hits.
 - `interesting/coverage/`: per-asset totals for endpoints/sinks/user sinks/secrets/signatures.
-- `interesting/secrets/`: high-entropy literals or known key prefixes (e.g., `AKIA`, `AIza`, `ghp_`).
+- `interesting/secrets/`: high-entropy literals or known key prefixes (e.g., `AKIA`, `AIza`, `ghp_`), plus JWT detection. URL/path-looking strings are filtered to reduce noise.
 - `interesting/sinks/`: DOM/code execution sinks and user-controlled sink candidates (e.g., `innerHTML`, `setAttribute`, `eval`, `Function`).
 - `interesting/signatures/`: signature pack matches (regex rules from `signatures.json`).
 - `interesting/sourcemaps/`: sourcemap graph with resolved source stats per file.
 
 These files are regenerated on each refresh.
 
+Coverage legend used in `interesting/coverage/coverage.txt`:
+- `T`: total findings for the asset.
+- `E`: endpoints.
+- `S`: sinks.
+- `U`: user-controlled sinks.
+- `K`: secrets.
+- `G`: signature matches.
+
 ## Diff Viewer
 
 Use the **Diffs** node in the JSReconduit sidebar to open a side-by-side diff of the previous and current versions of an asset. Added endpoints and sinks are highlighted in the right-hand editor.
 
+## HTML Capture and Asset Links
+
+HTML responses are stored under `html/` and listed in the **HTML** node of the sidebar. Script `src` references are extracted so you can jump from HTML to captured JavaScript when it’s available.
+
 ## Call Graph and Flow Traces
 
 JSReconduit builds a lightweight call graph and source-to-sink traces to surface dataflow paths. Traces are listed in the sidebar and exported under `interesting/flows/`.
+
+## Chunk Discovery
+
+JSReconduit can extract lazy chunk candidates from captured JS and (optionally) fetch them. Enable fetch carefully, because it makes additional HTTP requests to the target.
 
 ## Deobfuscation
 

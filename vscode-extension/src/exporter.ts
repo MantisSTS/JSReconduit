@@ -34,6 +34,27 @@ function flattenFindings(snapshot: StoreSnapshot): Array<{
   };
 
   pushFindings("endpoint", snapshot.endpoints);
+  pushFindings("data", snapshot.data);
+  pushFindings("path", snapshot.paths);
+  pushFindings("url", snapshot.urls);
+  pushFindings("hostname", snapshot.hostnames);
+  pushFindings("extension", snapshot.extensions);
+  pushFindings("mime", snapshot.mimeTypes);
+  pushFindings("regex", snapshot.regexes);
+  pushFindings("graphql", snapshot.graphql);
+  pushFindings("event", snapshot.events);
+  pushFindings("location", snapshot.location);
+  pushFindings("storage", snapshot.storage);
+  pushFindings("cookie", snapshot.cookies);
+  pushFindings("document_domain", snapshot.documentDomain);
+  pushFindings("window_name", snapshot.windowName);
+  pushFindings("window_open", snapshot.windowOpen);
+  pushFindings("urlsearchparams", snapshot.urlSearchParams);
+  pushFindings("rest_client", snapshot.restClient);
+  pushFindings("fetch_options", snapshot.fetchOptions);
+  pushFindings("schema", snapshot.schemas);
+  pushFindings("dependency", snapshot.dependencies);
+  pushFindings("feature_flag", snapshot.featureFlags);
   pushFindings("sink", snapshot.sinks);
   pushFindings("user_sink", snapshot.userSinks);
   pushFindings("secret", snapshot.secrets);
@@ -112,6 +133,27 @@ export async function exportFindings(
       generatedAt: new Date().toISOString(),
       findings: {
         endpoints: snapshot.endpoints,
+        data: snapshot.data,
+        paths: snapshot.paths,
+        urls: snapshot.urls,
+        hostnames: snapshot.hostnames,
+        extensions: snapshot.extensions,
+        mimeTypes: snapshot.mimeTypes,
+        regexes: snapshot.regexes,
+        graphql: snapshot.graphql,
+        events: snapshot.events,
+        location: snapshot.location,
+        storage: snapshot.storage,
+        cookies: snapshot.cookies,
+        documentDomain: snapshot.documentDomain,
+        windowName: snapshot.windowName,
+        windowOpen: snapshot.windowOpen,
+        urlSearchParams: snapshot.urlSearchParams,
+        restClient: snapshot.restClient,
+        fetchOptions: snapshot.fetchOptions,
+        schemas: snapshot.schemas,
+        dependencies: snapshot.dependencies,
+        featureFlags: snapshot.featureFlags,
         sinks: snapshot.sinks,
         userSinks: snapshot.userSinks,
         secrets: snapshot.secrets,
@@ -129,6 +171,7 @@ export async function exportFindings(
       clusters: snapshot.clusters,
       callGraph: snapshot.callGraph,
       traces: snapshot.traces,
+      htmlAssets: snapshot.htmlAssets,
     };
     await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
     return filePath;

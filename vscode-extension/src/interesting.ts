@@ -49,6 +49,8 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
   const signaturesDir = path.join(interestingDir, "signatures");
   const clusterDir = path.join(interestingDir, "clusters");
   const flowDir = path.join(interestingDir, "flows");
+  const descriptorsDir = path.join(interestingDir, "descriptors");
+  const assetsDir = path.join(interestingDir, "assets");
 
   const endpoints = unique(snapshot.endpoints.map((finding) => finding.label));
   const secrets = unique(snapshot.secrets.map((finding) => secretValue(finding)));
@@ -62,6 +64,100 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
   const clusters = snapshot.clusters.map(
     (cluster) => `${cluster.basePath}\t${cluster.authHint}\t${cluster.endpoints.length}`
   );
+  const traceLines = snapshot.traces.map((trace) => {
+    const line = trace.sink.location ? String(trace.sink.location.line) : "?";
+    return `${trace.source.label}\t${trace.sink.label}\t${trace.filePath}:${line}\t${trace.path.join(" -> ")}`;
+  });
+  const callGraphLines = snapshot.callGraph.map((edge) => {
+    const line = edge.location ? String(edge.location.line) : "?";
+    return `${edge.caller}\t${edge.callee}\t${edge.filePath}:${line}`;
+  });
+  const fetchOptionLines = snapshot.fetchOptions.map(
+    (finding) => `${finding.label}\t${finding.detail || ""}\t${finding.filePath}`
+  );
+  const descriptorLists: Array<{ name: string; values: string[]; findings: Finding[] }> = [
+    { name: "data", values: unique(snapshot.data.map((finding) => finding.label)), findings: snapshot.data },
+    { name: "paths", values: unique(snapshot.paths.map((finding) => finding.label)), findings: snapshot.paths },
+    { name: "urls", values: unique(snapshot.urls.map((finding) => finding.label)), findings: snapshot.urls },
+    {
+      name: "hostnames",
+      values: unique(snapshot.hostnames.map((finding) => finding.label)),
+      findings: snapshot.hostnames,
+    },
+    {
+      name: "extensions",
+      values: unique(snapshot.extensions.map((finding) => finding.label)),
+      findings: snapshot.extensions,
+    },
+    {
+      name: "mime-types",
+      values: unique(snapshot.mimeTypes.map((finding) => finding.label)),
+      findings: snapshot.mimeTypes,
+    },
+    {
+      name: "regex",
+      values: unique(snapshot.regexes.map((finding) => finding.label)),
+      findings: snapshot.regexes,
+    },
+    {
+      name: "graphql",
+      values: unique(snapshot.graphql.map((finding) => finding.label)),
+      findings: snapshot.graphql,
+    },
+    { name: "events", values: unique(snapshot.events.map((finding) => finding.label)), findings: snapshot.events },
+    {
+      name: "location",
+      values: unique(snapshot.location.map((finding) => finding.label)),
+      findings: snapshot.location,
+    },
+    { name: "storage", values: unique(snapshot.storage.map((finding) => finding.label)), findings: snapshot.storage },
+    { name: "cookies", values: unique(snapshot.cookies.map((finding) => finding.label)), findings: snapshot.cookies },
+    {
+      name: "document-domain",
+      values: unique(snapshot.documentDomain.map((finding) => finding.label)),
+      findings: snapshot.documentDomain,
+    },
+    {
+      name: "window-name",
+      values: unique(snapshot.windowName.map((finding) => finding.label)),
+      findings: snapshot.windowName,
+    },
+    {
+      name: "window-open",
+      values: unique(snapshot.windowOpen.map((finding) => finding.label)),
+      findings: snapshot.windowOpen,
+    },
+    {
+      name: "urlsearchparams",
+      values: unique(snapshot.urlSearchParams.map((finding) => finding.label)),
+      findings: snapshot.urlSearchParams,
+    },
+    {
+      name: "rest-client",
+      values: unique(snapshot.restClient.map((finding) => finding.label)),
+      findings: snapshot.restClient,
+    },
+    {
+      name: "fetch-options",
+      values: fetchOptionLines,
+      findings: snapshot.fetchOptions,
+    },
+    {
+      name: "schemas",
+      values: unique(snapshot.schemas.map((finding) => finding.label)),
+      findings: snapshot.schemas,
+    },
+    {
+      name: "dependencies",
+      values: unique(snapshot.dependencies.map((finding) => finding.label)),
+      findings: snapshot.dependencies,
+    },
+    {
+      name: "feature-flags",
+      values: unique(snapshot.featureFlags.map((finding) => finding.label)),
+      findings: snapshot.featureFlags,
+    },
+  ];
 
   await Promise.all([
     writeTextList(path.join(apiDir, "endpoints.txt"), endpoints),
@@ -118,6 +214,27 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
     writeJson(path.join(clusterDir, "clusters.json"), snapshot.clusters),
     writeJson(path.join(flowDir, "call-graph.json"), snapshot.callGraph),
     writeJson(path.join(flowDir, "traces.json"), snapshot.traces),
+    writeTextList(path.join(flowDir, "call-graph.txt"), callGraphLines),
+    writeTextList(path.join(flowDir, "traces.txt"), traceLines),
+    ...descriptorLists.flatMap((entry) => [
+      writeTextList(path.join(descriptorsDir, `${entry.name}.txt`), entry.values),
+      writeJson(path.join(descriptorsDir, `${entry.name}.json`), serializeFindings(entry.findings)),
+    ]),
+    writeJson(
+      path.join(assetsDir, "html.json"),
+      snapshot.htmlAssets.map((entry) => ({
+        url: entry.asset.url,
+        htmlPath: entry.htmlPath,
+        inlineScripts: entry.inlineScripts,
+        scripts: entry.scriptSrcs,
+      }))
+    ),
+    writeTextList(
+      path.join(assetsDir, "html.txt"),
+      snapshot.htmlAssets.map(
+        (entry) => `${entry.asset.url}\t${entry.inlineScripts}\t${entry.scriptSrcs.length}`
+      )
+    ),
   ]);
 
   const summary = {
@@ -135,6 +252,8 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
     clusters: snapshot.clusters.length,
     traces: snapshot.traces.length,
     callGraph: snapshot.callGraph.length,
+    descriptors: descriptorLists.reduce((sum, entry) => sum + entry.findings.length, 0),
+    html: snapshot.htmlAssets.length,
     updatedAt: new Date().toISOString(),
   };
   await writeJson(path.join(interestingDir, "summary.json"), summary);

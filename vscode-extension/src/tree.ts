@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import { URL } from "url";
 import {
   AlertEntry,
   AssetAnalysis,
@@ -24,6 +25,8 @@ export type TreeNode =
   | { type: "route"; route: RouteEntry }
   | { type: "drift"; drift: DriftEntry }
   | { type: "diff"; drift: DriftEntry }
+  | { type: "html"; html: { url: string; path: string; scripts: string[]; inline: number } }
+  | { type: "htmlScript"; script: string; targetPath?: string }
   | { type: "sourcemap"; asset: AssetAnalysis; filePath: string }
   | { type: "cluster"; cluster: EndpointCluster }
   | { type: "trace"; trace: FlowTrace }
@@ -102,7 +105,10 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open",
         arguments: [element.asset.analysisPath, 1, 1],
       };
-      item.tooltip = `${element.asset.asset.url}\n${element.asset.analysisPath}`;
+      const htmlRefs = element.asset.htmlReferrers && element.asset.htmlReferrers.length
+        ? `\nHTML: ${element.asset.htmlReferrers.join(", ")}`
+        : "";
+      item.tooltip = `${element.asset.asset.url}\n${element.asset.analysisPath}${htmlRefs}`;
       return item;
     }
 
@@ -166,6 +172,31 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open Diff",
         arguments: [element.drift],
       };
+      return item;
+    }
+
+    if (element.type === "html") {
+      const item = new vscode.TreeItem(element.html.url, vscode.TreeItemCollapsibleState.Collapsed);
+      const inline = element.html.inline ? `, inline: ${element.html.inline}` : "";
+      item.description = `${element.html.scripts.length} scripts${inline}`;
+      item.command = {
+        command: "jsreconduit.openLocation",
+        title: "Open",
+        arguments: [element.html.path, 1, 1],
+      };
+      return item;
+    }
+
+    if (element.type === "htmlScript") {
+      const item = new vscode.TreeItem(element.script, vscode.TreeItemCollapsibleState.None);
+      if (element.targetPath) {
+        item.description = path.basename(element.targetPath);
+        item.command = {
+          command: "jsreconduit.openLocation",
+          title: "Open",
+          arguments: [element.targetPath, 1, 1],
+        };
+      }
       return item;
     }
 
@@ -263,13 +294,35 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
   getChildren(element?: TreeNode): Thenable<TreeNode[]> {
     if (!element) {
       const counts = {
-        assets: this.snapshot.assets.length,
+        assets: this.snapshot.assets.filter((asset) => asset.asset.asset_type !== "html").length,
+        html: this.snapshot.htmlAssets.length,
         routes: this.snapshot.routes.length,
         drift: this.snapshot.drift.length,
         diffs: this.snapshot.drift.filter((entry) => entry.fromPath && entry.toPath).length,
         alerts: this.snapshot.alerts.length,
         triage: this.snapshot.triage.length,
         coverage: this.snapshot.coverage.coverage.length,
+        data: this.snapshot.data.length,
+        paths: this.snapshot.paths.length,
+        urls: this.snapshot.urls.length,
+        hostnames: this.snapshot.hostnames.length,
+        extensions: this.snapshot.extensions.length,
+        mimeTypes: this.snapshot.mimeTypes.length,
+        regexes: this.snapshot.regexes.length,
+        graphql: this.snapshot.graphql.length,
+        events: this.snapshot.events.length,
+        location: this.snapshot.location.length,
+        storage: this.snapshot.storage.length,
+        cookies: this.snapshot.cookies.length,
+        documentDomain: this.snapshot.documentDomain.length,
+        windowName: this.snapshot.windowName.length,
+        windowOpen: this.snapshot.windowOpen.length,
+        urlSearchParams: this.snapshot.urlSearchParams.length,
+        restClient: this.snapshot.restClient.length,
+        fetchOptions: this.snapshot.fetchOptions.length,
+        schemas: this.snapshot.schemas.length,
+        dependencies: this.snapshot.dependencies.length,
+        featureFlags: this.snapshot.featureFlags.length,
         endpoints: this.snapshot.endpoints.length,
         sinks: this.snapshot.sinks.length,
         userSinks: this.snapshot.userSinks.length,
@@ -284,6 +337,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       };
       return Promise.resolve([
         { type: "root", id: "assets", label: `Captured Files (${counts.assets})` },
+        { type: "root", id: "html", label: `HTML (${counts.html})` },
         { type: "root", id: "routes", label: `Routes (${counts.routes})` },
         { type: "root", id: "drift", label: `Drift (${counts.drift})` },
         { type: "root", id: "diffs", label: `Diffs (${counts.diffs})` },
@@ -291,6 +345,27 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         { type: "root", id: "triage", label: `Triage (${counts.triage})` },
         { type: "root", id: "coverage", label: `Coverage (${counts.coverage})` },
         { type: "root", id: "clusters", label: `Clusters (${counts.clusters})` },
+        { type: "root", id: "data", label: `Data (${counts.data})` },
+        { type: "root", id: "paths", label: `Paths (${counts.paths})` },
+        { type: "root", id: "urls", label: `URLs (${counts.urls})` },
+        { type: "root", id: "hostnames", label: `Hostnames (${counts.hostnames})` },
+        { type: "root", id: "extensions", label: `Extensions (${counts.extensions})` },
+        { type: "root", id: "mime-types", label: `MIME Types (${counts.mimeTypes})` },
+        { type: "root", id: "regex", label: `Regex (${counts.regexes})` },
+        { type: "root", id: "graphql", label: `GraphQL (${counts.graphql})` },
+        { type: "root", id: "events", label: `Events (${counts.events})` },
+        { type: "root", id: "location", label: `Location (${counts.location})` },
+        { type: "root", id: "storage", label: `Storage (${counts.storage})` },
+        { type: "root", id: "cookies", label: `Cookies (${counts.cookies})` },
+        { type: "root", id: "document-domain", label: `Document Domain (${counts.documentDomain})` },
+        { type: "root", id: "window-name", label: `Window Name (${counts.windowName})` },
+        { type: "root", id: "window-open", label: `Window Open (${counts.windowOpen})` },
+        { type: "root", id: "urlsearchparams", label: `URLSearchParams (${counts.urlSearchParams})` },
+        { type: "root", id: "rest-client", label: `Rest Client (${counts.restClient})` },
+        { type: "root", id: "fetch-options", label: `Fetch Options (${counts.fetchOptions})` },
+        { type: "root", id: "schemas", label: `Schemas (${counts.schemas})` },
+        { type: "root", id: "dependencies", label: `Dependencies (${counts.dependencies})` },
+        { type: "root", id: "feature-flags", label: `Feature Flags (${counts.featureFlags})` },
         { type: "root", id: "endpoints", label: `Endpoints (${counts.endpoints})` },
         { type: "root", id: "sinks", label: `Sinks (${counts.sinks})` },
         { type: "root", id: "user-sinks", label: `User Sinks (${counts.userSinks})` },
@@ -307,7 +382,23 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
     if (element.type === "root") {
       switch (element.id) {
         case "assets":
-          return Promise.resolve(this.snapshot.assets.map((asset) => ({ type: "asset", asset })));
+          return Promise.resolve(
+            this.snapshot.assets
+              .filter((asset) => asset.asset.asset_type !== "html")
+              .map((asset) => ({ type: "asset", asset }))
+          );
+        case "html":
+          return Promise.resolve(
+            this.snapshot.htmlAssets.map((entry) => ({
+              type: "html",
+              html: {
+                url: entry.asset.url,
+                path: entry.htmlPath,
+                scripts: entry.scriptSrcs,
+                inline: entry.inlineScripts,
+              },
+            }))
+          );
         case "routes":
           return Promise.resolve(this.snapshot.routes.map((route) => ({ type: "route", route })));
         case "drift":
@@ -326,6 +417,84 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           return Promise.resolve(this.snapshot.coverage.coverage.map((coverage) => ({ type: "coverage", coverage })));
         case "clusters":
           return Promise.resolve(this.snapshot.clusters.map((cluster) => ({ type: "cluster", cluster })));
+        case "data":
+          return Promise.resolve(this.sortFindings(this.snapshot.data).map((finding) => ({ type: "finding", finding })));
+        case "paths":
+          return Promise.resolve(this.sortFindings(this.snapshot.paths).map((finding) => ({ type: "finding", finding })));
+        case "urls":
+          return Promise.resolve(this.sortFindings(this.snapshot.urls).map((finding) => ({ type: "finding", finding })));
+        case "hostnames":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.hostnames).map((finding) => ({ type: "finding", finding }))
+          );
+        case "extensions":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.extensions).map((finding) => ({ type: "finding", finding }))
+          );
+        case "mime-types":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.mimeTypes).map((finding) => ({ type: "finding", finding }))
+          );
+        case "regex":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.regexes).map((finding) => ({ type: "finding", finding }))
+          );
+        case "graphql":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.graphql).map((finding) => ({ type: "finding", finding }))
+          );
+        case "events":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.events).map((finding) => ({ type: "finding", finding }))
+          );
+        case "location":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.location).map((finding) => ({ type: "finding", finding }))
+          );
+        case "storage":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.storage).map((finding) => ({ type: "finding", finding }))
+          );
+        case "cookies":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.cookies).map((finding) => ({ type: "finding", finding }))
+          );
+        case "document-domain":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.documentDomain).map((finding) => ({ type: "finding", finding }))
+          );
+        case "window-name":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.windowName).map((finding) => ({ type: "finding", finding }))
+          );
+        case "window-open":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.windowOpen).map((finding) => ({ type: "finding", finding }))
+          );
+        case "urlsearchparams":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.urlSearchParams).map((finding) => ({ type: "finding", finding }))
+          );
+        case "rest-client":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.restClient).map((finding) => ({ type: "finding", finding }))
+          );
+        case "fetch-options":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.fetchOptions).map((finding) => ({ type: "finding", finding }))
+          );
+        case "schemas":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.schemas).map((finding) => ({ type: "finding", finding }))
+          );
+        case "dependencies":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.dependencies).map((finding) => ({ type: "finding", finding }))
+          );
+        case "feature-flags":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.featureFlags).map((finding) => ({ type: "finding", finding }))
+          );
         case "endpoints":
           return Promise.resolve(this.sortFindings(this.snapshot.endpoints).map((finding) => ({ type: "finding", finding })));
         case "sinks":
@@ -391,6 +560,24 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       return Promise.resolve(element.route.assets.map((asset) => ({ type: "asset", asset })));
     }
 
+    if (element.type === "html") {
+      const nodes: TreeNode[] = [];
+      for (const script of element.html.scripts) {
+        const resolved = this.resolveScriptUrl(element.html.url, script);
+        let targetPath: string | undefined;
+        if (resolved) {
+          const match = this.snapshot.assets.find(
+            (asset) => asset.asset.asset_type !== "html" && asset.asset.url === resolved
+          );
+          if (match) {
+            targetPath = match.analysisPath;
+          }
+        }
+        nodes.push({ type: "htmlScript", script, targetPath });
+      }
+      return Promise.resolve(nodes);
+    }
+
     if (element.type === "cluster") {
       return Promise.resolve(
         this.sortFindings(element.cluster.endpoints).map((finding) => ({ type: "finding", finding }))
@@ -421,5 +608,27 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       ...finding,
       detail: finding.detail ? `${category}: ${finding.detail}` : category,
     }));
+  }
+
+  private resolveScriptUrl(baseUrl: string, script: string): string | null {
+    if (!script) {
+      return null;
+    }
+    if (script.startsWith("http://") || script.startsWith("https://")) {
+      return script;
+    }
+    if (script.startsWith("//")) {
+      try {
+        const base = new URL(baseUrl);
+        return `${base.protocol}${script}`;
+      } catch {
+        return null;
+      }
+    }
+    try {
+      return new URL(script, baseUrl).toString();
+    } catch {
+      return null;
+    }
   }
 }
