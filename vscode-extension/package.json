@@ -13,6 +13,10 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onView:jsreconduit.view",
+    "onView:jsreconduit.assets",
+    "onView:jsreconduit.findings",
+    "onView:jsreconduit.drift",
+    "onView:jsreconduit.intel",
     "onCommand:jsreconduit.refresh",
     "onCommand:jsreconduit.exportWordlist",
     "onCommand:jsreconduit.deobfuscateAll",
@@ -23,7 +27,9 @@
     "onCommand:jsreconduit.writeSnippet",
     "onCommand:jsreconduit.openDiff",
     "onCommand:jsreconduit.goToRoute",
-    "onCommand:jsreconduit.goToAsset"
+    "onCommand:jsreconduit.goToAsset",
+    "onCommand:jsreconduit.copyUrl",
+    "onCommand:jsreconduit.copyPath"
   ],
   "contributes": {
     "viewsContainers": {
@@ -39,7 +45,23 @@
       "jsreconduit": [
         {
           "id": "jsreconduit.view",
-          "name": "JSReconduit"
+          "name": "Overview"
+        },
+        {
+          "id": "jsreconduit.assets",
+          "name": "Assets"
+        },
+        {
+          "id": "jsreconduit.findings",
+          "name": "Findings"
+        },
+        {
+          "id": "jsreconduit.drift",
+          "name": "Drift"
+        },
+        {
+          "id": "jsreconduit.intel",
+          "name": "Intel"
         }
       ]
     },
@@ -91,8 +113,52 @@
       {
         "command": "jsreconduit.goToAsset",
         "title": "JSReconduit: Go To Asset"
+      },
+      {
+        "command": "jsreconduit.copyUrl",
+        "title": "JSReconduit: Copy URL"
+      },
+      {
+        "command": "jsreconduit.copyPath",
+        "title": "JSReconduit: Copy File Path"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "jsreconduit.refresh",
+          "when": "view == jsreconduit.view || view == jsreconduit.assets || view == jsreconduit.findings || view == jsreconduit.drift || view == jsreconduit.intel",
+          "group": "navigation"
+        },
+        {
+          "command": "jsreconduit.generateReport",
+          "when": "view == jsreconduit.view",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "jsreconduit.openLocation",
+          "when": "viewItem == asset || viewItem == html || viewItem == finding || viewItem == sourcemap || viewItem == htmlScript || viewItem == trace || viewItem == callGraphEdge || viewItem == triage",
+          "group": "navigation"
+        },
+        {
+          "command": "jsreconduit.openDiff",
+          "when": "viewItem == diff",
+          "group": "navigation"
+        },
+        {
+          "command": "jsreconduit.copyUrl",
+          "when": "viewItem == asset || viewItem == html || viewItem == drift || viewItem == alert",
+          "group": "inline"
+        },
+        {
+          "command": "jsreconduit.copyPath",
+          "when": "viewItem == asset || viewItem == html || viewItem == finding || viewItem == sourcemap || viewItem == triage || viewItem == trace || viewItem == callGraphEdge",
+          "group": "inline"
+        }
+      ]
+    },
     "configuration": {
       "title": "JSReconduit",
       "properties": {

@@ -15,8 +15,12 @@ import {
   TriageEntry,
 } from "./types";
 
+export type ViewId = "overview" | "assets" | "findings" | "drift" | "intel";
+
 export type TreeNode =
   | { type: "root"; id: string; label: string }
+  | { type: "stat"; label: string; value: string }
+  | { type: "action"; label: string; command: string; description?: string; icon?: string; args?: unknown[] }
   | { type: "asset"; asset: AssetAnalysis }
   | { type: "finding"; finding: Finding }
   | { type: "coverage"; coverage: CoverageEntry }
@@ -39,9 +43,11 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private snapshot: StoreSnapshot;
+  private viewId: ViewId;
 
-  constructor(snapshot: StoreSnapshot) {
+  constructor(snapshot: StoreSnapshot, viewId: ViewId) {
     this.snapshot = snapshot;
+    this.viewId = viewId;
   }
 
   update(snapshot: StoreSnapshot): void {
@@ -82,10 +88,171 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
     return `${trace.source.label} → ${trace.sink.label}`;
   }
 
+  private buildRootNodes(): TreeNode[] {
+    const counts = {
+      assets: this.snapshot.assets.filter((asset) => asset.asset.asset_type !== "html").length,
+      html: this.snapshot.htmlAssets.length,
+      routes: this.snapshot.routes.length,
+      drift: this.snapshot.drift.length,
+      diffs: this.snapshot.drift.filter((entry) => entry.fromPath && entry.toPath).length,
+      alerts: this.snapshot.alerts.length,
+      triage: this.snapshot.triage.length,
+      coverage: this.snapshot.coverage.coverage.length,
+      data: this.snapshot.data.length,
+      paths: this.snapshot.paths.length,
+      urls: this.snapshot.urls.length,
+      hostnames: this.snapshot.hostnames.length,
+      extensions: this.snapshot.extensions.length,
+      mimeTypes: this.snapshot.mimeTypes.length,
+      regexes: this.snapshot.regexes.length,
+      graphql: this.snapshot.graphql.length,
+      events: this.snapshot.events.length,
+      location: this.snapshot.location.length,
+      storage: this.snapshot.storage.length,
+      cookies: this.snapshot.cookies.length,
+      documentDomain: this.snapshot.documentDomain.length,
+      windowName: this.snapshot.windowName.length,
+      windowOpen: this.snapshot.windowOpen.length,
+      urlSearchParams: this.snapshot.urlSearchParams.length,
+      restClient: this.snapshot.restClient.length,
+      fetchOptions: this.snapshot.fetchOptions.length,
+      schemas: this.snapshot.schemas.length,
+      dependencies: this.snapshot.dependencies.length,
+      featureFlags: this.snapshot.featureFlags.length,
+      endpoints: this.snapshot.endpoints.length,
+      sinks: this.snapshot.sinks.length,
+      userSinks: this.snapshot.userSinks.length,
+      secrets: this.snapshot.secrets.length,
+      signatures: this.snapshot.signatures.length,
+      frameworks: this.snapshot.frameworks.length,
+      clusters: this.snapshot.clusters.length,
+      traces: this.snapshot.traces.length,
+      callGraph: this.snapshot.callGraph.length,
+      sourcemaps: this.snapshot.sourcemaps.length,
+      wordlist: this.snapshot.wordlist.length,
+    };
+
+    switch (this.viewId) {
+      case "overview":
+        return [
+          { type: "root", id: "summary", label: "Summary" },
+          { type: "root", id: "actions", label: "Quick Actions" },
+          { type: "root", id: "triage", label: `Top Triage (${counts.triage})` },
+          { type: "root", id: "alerts", label: `Alerts (${counts.alerts})` },
+          { type: "root", id: "drift", label: `Recent Drift (${counts.drift})` },
+          { type: "root", id: "coverage", label: `Coverage (${counts.coverage})` },
+          { type: "root", id: "clusters", label: `Endpoint Clusters (${counts.clusters})` },
+        ];
+      case "assets":
+        return [
+          { type: "root", id: "assets", label: `Captured Files (${counts.assets})` },
+          { type: "root", id: "html", label: `HTML (${counts.html})` },
+          { type: "root", id: "routes", label: `Routes (${counts.routes})` },
+          { type: "root", id: "sourcemaps", label: `Sourcemaps (${counts.sourcemaps})` },
+        ];
+      case "findings":
+        return [
+          { type: "root", id: "triage", label: `Triage (${counts.triage})` },
+          { type: "root", id: "alerts", label: `Alerts (${counts.alerts})` },
+          { type: "root", id: "endpoints", label: `Endpoints (${counts.endpoints})` },
+          { type: "root", id: "user-sinks", label: `User Sinks (${counts.userSinks})` },
+          { type: "root", id: "sinks", label: `Sinks (${counts.sinks})` },
+          { type: "root", id: "secrets", label: `Secrets (${counts.secrets})` },
+          { type: "root", id: "signatures", label: `Signatures (${counts.signatures})` },
+          { type: "root", id: "frameworks", label: `Frameworks (${counts.frameworks})` },
+          { type: "root", id: "traces", label: `Traces (${counts.traces})` },
+          { type: "root", id: "call-graph", label: `Call Graph (${counts.callGraph})` },
+          { type: "root", id: "clusters", label: `Endpoint Clusters (${counts.clusters})` },
+        ];
+      case "drift":
+        return [
+          { type: "root", id: "drift", label: `Drift (${counts.drift})` },
+          { type: "root", id: "diffs", label: `Diffs (${counts.diffs})` },
+        ];
+      case "intel":
+        return [
+          { type: "root", id: "data", label: `Data (${counts.data})` },
+          { type: "root", id: "paths", label: `Paths (${counts.paths})` },
+          { type: "root", id: "urls", label: `URLs (${counts.urls})` },
+          { type: "root", id: "hostnames", label: `Hostnames (${counts.hostnames})` },
+          { type: "root", id: "extensions", label: `Extensions (${counts.extensions})` },
+          { type: "root", id: "mime-types", label: `MIME Types (${counts.mimeTypes})` },
+          { type: "root", id: "regex", label: `Regex (${counts.regexes})` },
+          { type: "root", id: "graphql", label: `GraphQL (${counts.graphql})` },
+          { type: "root", id: "events", label: `Events (${counts.events})` },
+          { type: "root", id: "location", label: `Location (${counts.location})` },
+          { type: "root", id: "storage", label: `Storage (${counts.storage})` },
+          { type: "root", id: "cookies", label: `Cookies (${counts.cookies})` },
+          { type: "root", id: "document-domain", label: `Document Domain (${counts.documentDomain})` },
+          { type: "root", id: "window-name", label: `Window Name (${counts.windowName})` },
+          { type: "root", id: "window-open", label: `Window Open (${counts.windowOpen})` },
+          { type: "root", id: "urlsearchparams", label: `URLSearchParams (${counts.urlSearchParams})` },
+          { type: "root", id: "rest-client", label: `Rest Client (${counts.restClient})` },
+          { type: "root", id: "fetch-options", label: `Fetch Options (${counts.fetchOptions})` },
+          { type: "root", id: "schemas", label: `Schemas (${counts.schemas})` },
+          { type: "root", id: "dependencies", label: `Dependencies (${counts.dependencies})` },
+          { type: "root", id: "feature-flags", label: `Feature Flags (${counts.featureFlags})` },
+          { type: "root", id: "wordlist", label: `Wordlist (${counts.wordlist})` },
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private buildSummaryStats(): TreeNode[] {
+    const totals = this.snapshot.coverage.totals;
+    return [
+      { type: "stat", label: "Assets", value: String(this.snapshot.assets.length) },
+      { type: "stat", label: "HTML", value: String(this.snapshot.htmlAssets.length) },
+      { type: "stat", label: "Routes", value: String(this.snapshot.routes.length) },
+      { type: "stat", label: "Endpoints", value: String(totals.endpoints) },
+      { type: "stat", label: "User Sinks", value: String(totals.userSinks) },
+      { type: "stat", label: "Secrets", value: String(totals.secrets) },
+      { type: "stat", label: "Signatures", value: String(totals.signatures) },
+      { type: "stat", label: "Triage", value: String(this.snapshot.triage.length) },
+      { type: "stat", label: "Alerts", value: String(this.snapshot.alerts.length) },
+      { type: "stat", label: "Drift", value: String(this.snapshot.drift.length) },
+    ];
+  }
+
+  private buildActions(): TreeNode[] {
+    return [
+      { type: "action", label: "Refresh", command: "jsreconduit.refresh", icon: "refresh" },
+      { type: "action", label: "Deobfuscate All Assets", command: "jsreconduit.deobfuscateAll", icon: "symbol-method" },
+      { type: "action", label: "Export Findings (JSON)", command: "jsreconduit.exportFindingsJson", icon: "cloud-download" },
+      { type: "action", label: "Export Findings (CSV)", command: "jsreconduit.exportFindingsCsv", icon: "cloud-download" },
+      { type: "action", label: "Export Findings (SARIF)", command: "jsreconduit.exportFindingsSarif", icon: "cloud-download" },
+      { type: "action", label: "Generate Report (Markdown)", command: "jsreconduit.generateReport", icon: "file-text" },
+      { type: "action", label: "Export Wordlist", command: "jsreconduit.exportWordlist", icon: "cloud-download" },
+      { type: "action", label: "Write Instrumentation Snippet", command: "jsreconduit.writeSnippet", icon: "code" },
+    ];
+  }
+
   getTreeItem(element: TreeNode): vscode.TreeItem {
     if (element.type === "root") {
       const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Collapsed);
       item.contextValue = element.id;
+      return item;
+    }
+
+    if (element.type === "stat") {
+      const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
+      item.description = element.value;
+      item.contextValue = "stat";
+      item.iconPath = new vscode.ThemeIcon("graph");
+      return item;
+    }
+
+    if (element.type === "action") {
+      const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
+      item.description = element.description;
+      item.command = {
+        command: element.command,
+        title: element.label,
+        arguments: element.args || [],
+      };
+      item.contextValue = "action";
+      item.iconPath = new vscode.ThemeIcon(element.icon || "play");
       return item;
     }
 
@@ -109,18 +276,21 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         ? `\nHTML: ${element.asset.htmlReferrers.join(", ")}`
         : "";
       item.tooltip = `${element.asset.asset.url}\n${element.asset.analysisPath}${htmlRefs}`;
+      item.contextValue = "asset";
       return item;
     }
 
     if (element.type === "route") {
       const item = new vscode.TreeItem(element.route.route, vscode.TreeItemCollapsibleState.Collapsed);
       item.description = `${element.route.assets.length} assets`;
+      item.contextValue = "route";
       return item;
     }
 
     if (element.type === "coverage") {
       const item = new vscode.TreeItem(element.coverage.label, vscode.TreeItemCollapsibleState.None);
       item.description = `T:${element.coverage.total} E:${element.coverage.endpoints} S:${element.coverage.sinks} U:${element.coverage.userSinks} K:${element.coverage.secrets} G:${element.coverage.signatures}`;
+      item.contextValue = "coverage";
       return item;
     }
 
@@ -135,6 +305,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open",
         arguments: [element.triage.filePath, 1, 1],
       };
+      item.contextValue = "triage";
       return item;
     }
 
@@ -144,6 +315,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         vscode.TreeItemCollapsibleState.None
       );
       item.description = element.alert.details.join(", ");
+      item.contextValue = "alert";
       return item;
     }
 
@@ -158,6 +330,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         added.paths.length +
         added.urls.length;
       item.description = `${total} new findings`;
+      item.contextValue = "drift";
       return item;
     }
 
@@ -172,6 +345,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open Diff",
         arguments: [element.drift],
       };
+      item.contextValue = "diff";
       return item;
     }
 
@@ -184,6 +358,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open",
         arguments: [element.html.path, 1, 1],
       };
+      item.contextValue = "html";
       return item;
     }
 
@@ -197,6 +372,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           arguments: [element.targetPath, 1, 1],
         };
       }
+      item.contextValue = "htmlScript";
       return item;
     }
 
@@ -212,6 +388,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open",
         arguments: [element.finding.filePath, location?.line || 1, location?.column || 1],
       };
+      item.contextValue = "finding";
       return item;
     }
 
@@ -219,6 +396,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       const label = `${element.cluster.basePath} (${element.cluster.authHint})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.description = `${element.cluster.endpoints.length} endpoints`;
+      item.contextValue = "cluster";
       return item;
     }
 
@@ -236,12 +414,14 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           location?.column || 1,
         ],
       };
+      item.contextValue = "trace";
       return item;
     }
 
     if (element.type === "callGraphCaller") {
       const item = new vscode.TreeItem(element.caller, vscode.TreeItemCollapsibleState.Collapsed);
       item.description = `${element.edges.length} calls`;
+      item.contextValue = "callGraphCaller";
       return item;
     }
 
@@ -258,6 +438,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           location?.column || 1,
         ],
       };
+      item.contextValue = "callGraphEdge";
       return item;
     }
 
@@ -274,6 +455,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Open",
         arguments: [element.filePath, 1, 1],
       };
+      item.contextValue = "sourcemap";
       return item;
     }
 
@@ -284,103 +466,26 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         title: "Export Wordlist",
       };
       item.iconPath = new vscode.ThemeIcon("cloud-download");
+      item.contextValue = "wordlistAction";
       return item;
     }
 
     const wordItem = new vscode.TreeItem(element.value, vscode.TreeItemCollapsibleState.None);
+    wordItem.contextValue = "word";
     return wordItem;
   }
 
   getChildren(element?: TreeNode): Thenable<TreeNode[]> {
     if (!element) {
-      const counts = {
-        assets: this.snapshot.assets.filter((asset) => asset.asset.asset_type !== "html").length,
-        html: this.snapshot.htmlAssets.length,
-        routes: this.snapshot.routes.length,
-        drift: this.snapshot.drift.length,
-        diffs: this.snapshot.drift.filter((entry) => entry.fromPath && entry.toPath).length,
-        alerts: this.snapshot.alerts.length,
-        triage: this.snapshot.triage.length,
-        coverage: this.snapshot.coverage.coverage.length,
-        data: this.snapshot.data.length,
-        paths: this.snapshot.paths.length,
-        urls: this.snapshot.urls.length,
-        hostnames: this.snapshot.hostnames.length,
-        extensions: this.snapshot.extensions.length,
-        mimeTypes: this.snapshot.mimeTypes.length,
-        regexes: this.snapshot.regexes.length,
-        graphql: this.snapshot.graphql.length,
-        events: this.snapshot.events.length,
-        location: this.snapshot.location.length,
-        storage: this.snapshot.storage.length,
-        cookies: this.snapshot.cookies.length,
-        documentDomain: this.snapshot.documentDomain.length,
-        windowName: this.snapshot.windowName.length,
-        windowOpen: this.snapshot.windowOpen.length,
-        urlSearchParams: this.snapshot.urlSearchParams.length,
-        restClient: this.snapshot.restClient.length,
-        fetchOptions: this.snapshot.fetchOptions.length,
-        schemas: this.snapshot.schemas.length,
-        dependencies: this.snapshot.dependencies.length,
-        featureFlags: this.snapshot.featureFlags.length,
-        endpoints: this.snapshot.endpoints.length,
-        sinks: this.snapshot.sinks.length,
-        userSinks: this.snapshot.userSinks.length,
-        secrets: this.snapshot.secrets.length,
-        signatures: this.snapshot.signatures.length,
-        frameworks: this.snapshot.frameworks.length,
-        clusters: this.snapshot.clusters.length,
-        traces: this.snapshot.traces.length,
-        callGraph: this.snapshot.callGraph.length,
-        sourcemaps: this.snapshot.sourcemaps.length,
-        wordlist: this.snapshot.wordlist.length,
-      };
-      return Promise.resolve([
-        { type: "root", id: "assets", label: `Captured Files (${counts.assets})` },
-        { type: "root", id: "html", label: `HTML (${counts.html})` },
-        { type: "root", id: "routes", label: `Routes (${counts.routes})` },
-        { type: "root", id: "drift", label: `Drift (${counts.drift})` },
-        { type: "root", id: "diffs", label: `Diffs (${counts.diffs})` },
-        { type: "root", id: "alerts", label: `Alerts (${counts.alerts})` },
-        { type: "root", id: "triage", label: `Triage (${counts.triage})` },
-        { type: "root", id: "coverage", label: `Coverage (${counts.coverage})` },
-        { type: "root", id: "clusters", label: `Clusters (${counts.clusters})` },
-        { type: "root", id: "data", label: `Data (${counts.data})` },
-        { type: "root", id: "paths", label: `Paths (${counts.paths})` },
-        { type: "root", id: "urls", label: `URLs (${counts.urls})` },
-        { type: "root", id: "hostnames", label: `Hostnames (${counts.hostnames})` },
-        { type: "root", id: "extensions", label: `Extensions (${counts.extensions})` },
-        { type: "root", id: "mime-types", label: `MIME Types (${counts.mimeTypes})` },
-        { type: "root", id: "regex", label: `Regex (${counts.regexes})` },
-        { type: "root", id: "graphql", label: `GraphQL (${counts.graphql})` },
-        { type: "root", id: "events", label: `Events (${counts.events})` },
-        { type: "root", id: "location", label: `Location (${counts.location})` },
-        { type: "root", id: "storage", label: `Storage (${counts.storage})` },
-        { type: "root", id: "cookies", label: `Cookies (${counts.cookies})` },
-        { type: "root", id: "document-domain", label: `Document Domain (${counts.documentDomain})` },
-        { type: "root", id: "window-name", label: `Window Name (${counts.windowName})` },
-        { type: "root", id: "window-open", label: `Window Open (${counts.windowOpen})` },
-        { type: "root", id: "urlsearchparams", label: `URLSearchParams (${counts.urlSearchParams})` },
-        { type: "root", id: "rest-client", label: `Rest Client (${counts.restClient})` },
-        { type: "root", id: "fetch-options", label: `Fetch Options (${counts.fetchOptions})` },
-        { type: "root", id: "schemas", label: `Schemas (${counts.schemas})` },
-        { type: "root", id: "dependencies", label: `Dependencies (${counts.dependencies})` },
-        { type: "root", id: "feature-flags", label: `Feature Flags (${counts.featureFlags})` },
-        { type: "root", id: "endpoints", label: `Endpoints (${counts.endpoints})` },
-        { type: "root", id: "sinks", label: `Sinks (${counts.sinks})` },
-        { type: "root", id: "user-sinks", label: `User Sinks (${counts.userSinks})` },
-        { type: "root", id: "secrets", label: `Secrets (${counts.secrets})` },
-        { type: "root", id: "signatures", label: `Signatures (${counts.signatures})` },
-        { type: "root", id: "frameworks", label: `Frameworks (${counts.frameworks})` },
-        { type: "root", id: "traces", label: `Traces (${counts.traces})` },
-        { type: "root", id: "call-graph", label: `Call Graph (${counts.callGraph})` },
-        { type: "root", id: "sourcemaps", label: `Sourcemaps (${counts.sourcemaps})` },
-        { type: "root", id: "wordlist", label: `Wordlist (${counts.wordlist})` },
-      ]);
+      return Promise.resolve(this.buildRootNodes());
     }
 
     if (element.type === "root") {
       switch (element.id) {
+        case "summary":
+          return Promise.resolve(this.buildSummaryStats());
+        case "actions":
+          return Promise.resolve(this.buildActions());
         case "assets":
           return Promise.resolve(
             this.snapshot.assets
@@ -402,7 +507,11 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
         case "routes":
           return Promise.resolve(this.snapshot.routes.map((route) => ({ type: "route", route })));
         case "drift":
-          return Promise.resolve(this.snapshot.drift.map((drift) => ({ type: "drift", drift })));
+          return Promise.resolve(
+            this.snapshot.drift
+              .slice(0, this.viewId === "overview" ? 10 : this.snapshot.drift.length)
+              .map((drift) => ({ type: "drift", drift }))
+          );
         case "diffs":
           return Promise.resolve(
             this.snapshot.drift
@@ -410,9 +519,17 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
               .map((drift) => ({ type: "diff", drift }))
           );
         case "alerts":
-          return Promise.resolve(this.snapshot.alerts.map((alert) => ({ type: "alert", alert })));
+          return Promise.resolve(
+            this.snapshot.alerts
+              .slice(0, this.viewId === "overview" ? 10 : this.snapshot.alerts.length)
+              .map((alert) => ({ type: "alert", alert }))
+          );
         case "triage":
-          return Promise.resolve(this.snapshot.triage.map((triage) => ({ type: "triage", triage })));
+          return Promise.resolve(
+            this.snapshot.triage
+              .slice(0, this.viewId === "overview" ? 10 : this.snapshot.triage.length)
+              .map((triage) => ({ type: "triage", triage }))
+          );
         case "coverage":
           return Promise.resolve(this.snapshot.coverage.coverage.map((coverage) => ({ type: "coverage", coverage })));
         case "clusters":

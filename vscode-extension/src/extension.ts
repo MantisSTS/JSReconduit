@@ -1,7 +1,8 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { ProjectWatcher } from "./indexer";
 import { JSReconduitStore } from "./store";
-import { JSReconduitTreeProvider } from "./tree";
+import { JSReconduitTreeProvider, TreeNode, ViewId } from "./tree";
 import { exportFindings } from "./exporter";
 import { writeInstrumentationSnippet } from "./instrumentation";
 import { writeReport } from "./report";
@@ -55,50 +56,151 @@ function getAutoWriteSnippet(): boolean {
   return config.get<boolean>("autoWriteSnippet", true);
 }
 
+function formatBaseLabel(baseDir: string): string {
+  const trimmed = baseDir.replace(/[\\/]+$/, "");
+  const base = path.basename(trimmed);
+  return base.length > 0 ? base : baseDir;
+}
+
+function getUrlFromItem(item: unknown): string | null {
+  if (!item) {
+    return null;
+  }
+  if (typeof item === "string") {
+    return item;
+  }
+  const node = item as TreeNode;
+  switch (node.type) {
+    case "asset":
+      return node.asset.asset.url;
+    case "html":
+      return node.html.url;
+    case "drift":
+      return node.drift.url;
+    case "alert":
+      return node.alert.url;
+    case "finding":
+      return node.finding.label;
+    default:
+      return null;
+  }
+}
+
+function getPathFromItem(item: unknown): string | null {
+  if (!item) {
+    return null;
+  }
+  if (typeof item === "string") {
+    return item;
+  }
+  const node = item as TreeNode;
+  switch (node.type) {
+    case "asset":
+      return node.asset.analysisPath;
+    case "html":
+      return node.html.path;
+    case "htmlScript":
+      return node.targetPath || null;
+    case "finding":
+      return node.finding.filePath;
+    case "triage":
+      return node.triage.filePath;
+    case "sourcemap":
+      return node.filePath;
+    case "callGraphEdge":
+      return node.edge.filePath;
+    case "trace":
+      return node.trace.filePath;
+    case "diff":
+      return node.drift.toPath || node.drift.fromPath || null;
+    default:
+      return null;
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("JSReconduit");
   const store = new JSReconduitStore(output);
-  const provider = new JSReconduitTreeProvider(store.snapshot());
+  const providers: Array<{ id: string; viewId: ViewId; provider: JSReconduitTreeProvider }> = [
+    { id: "jsreconduit.view", viewId: "overview", provider: new JSReconduitTreeProvider(store.snapshot(), "overview") },
+    { id: "jsreconduit.assets", viewId: "assets", provider: new JSReconduitTreeProvider(store.snapshot(), "assets") },
+    { id: "jsreconduit.findings", viewId: "findings", provider: new JSReconduitTreeProvider(store.snapshot(), "findings") },
+    { id: "jsreconduit.drift", viewId: "drift", provider: new JSReconduitTreeProvider(store.snapshot(), "drift") },
+    { id: "jsreconduit.intel", viewId: "intel", provider: new JSReconduitTreeProvider(store.snapshot(), "intel") },
+  ];
+  const updateProviders = () => {
+    const snapshot = store.snapshot();
+    for (const entry of providers) {
+      entry.provider.update(snapshot);
+    }
+  };
   const diffDecoration = vscode.window.createTextEditorDecorationType({
     backgroundColor: new vscode.ThemeColor("editor.rangeHighlightBackground"),
     overviewRulerColor: new vscode.ThemeColor("editorOverviewRuler.infoForeground"),
     overviewRulerLane: vscode.OverviewRulerLane.Right,
   });
+  const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusItem.command = "jsreconduit.refresh";
+  const initialBaseDir = getBaseDir();
+  let lastRefresh = "never";
+  statusItem.text = `$(radio-tower) JSReconduit: ${formatBaseLabel(initialBaseDir)}`;
+  statusItem.tooltip = `Base dir: ${initialBaseDir}\nLast refresh: ${lastRefresh}`;
+  statusItem.show();
 
   const refresh = async () => {
     const baseDir = getBaseDir();
-    await store.refresh(baseDir, {
-      autoDeobfuscate: getAutoDeobfuscate(),
-      preferDeobfuscated: getPreferDeobfuscated(),
-      signaturePath: getSignaturePath(),
-    });
-    provider.update(store.snapshot());
-    if (getAutoWordlist()) {
-      const snapshot = store.snapshot();
-      const overridePath = getWordlistOverride();
-      try {
-        await writeWordlist(baseDir, new Set(snapshot.wordlist), overridePath);
-      } catch (error) {
-        logError(output, "Failed to auto-write wordlist", error);
-      }
-    }
-    if (getAutoWriteSnippet()) {
-      try {
-        await writeInstrumentationSnippet(baseDir);
-      } catch (error) {
-        logError(output, "Failed to write instrumentation snippet", error);
-      }
+    const baseLabel = formatBaseLabel(baseDir);
+    statusItem.text = "$(sync~spin) JSReconduit: Refreshing";
+    statusItem.tooltip = `Base dir: ${baseDir}\nRefreshing...`;
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Window,
+          title: "JSReconduit: Refreshing",
+          cancellable: false,
+        },
+        async () => {
+          await store.refresh(baseDir, {
+            autoDeobfuscate: getAutoDeobfuscate(),
+            preferDeobfuscated: getPreferDeobfuscated(),
+            signaturePath: getSignaturePath(),
+          });
+          updateProviders();
+          if (getAutoWordlist()) {
+            const snapshot = store.snapshot();
+            const overridePath = getWordlistOverride();
+            try {
+              await writeWordlist(baseDir, new Set(snapshot.wordlist), overridePath);
+            } catch (error) {
+              logError(output, "Failed to auto-write wordlist", error);
+            }
+          }
+          if (getAutoWriteSnippet()) {
+            try {
+              await writeInstrumentationSnippet(baseDir);
+            } catch (error) {
+              logError(output, "Failed to write instrumentation snippet", error);
+            }
+          }
+        }
+      );
+      lastRefresh = new Date().toLocaleString();
+      statusItem.text = `$(radio-tower) JSReconduit: ${baseLabel}`;
+      statusItem.tooltip = `Base dir: ${baseDir}\nLast refresh: ${lastRefresh}`;
+    } catch (error) {
+      logError(output, "Refresh failed", error);
+      statusItem.text = `$(error) JSReconduit: ${baseLabel}`;
+      statusItem.tooltip = `Base dir: ${baseDir}\nLast refresh: ${lastRefresh}\nRefresh failed`;
     }
   };
 
   const watcher = new ProjectWatcher(getBaseDir(), refresh, output);
   watcher.start().then(refresh);
 
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("jsreconduit.view", provider),
-    watcher,
-    output
+  const viewRegistrations = providers.map((entry) =>
+    vscode.window.registerTreeDataProvider(entry.id, entry.provider)
   );
+  context.subscriptions.push(...viewRegistrations, watcher, output, statusItem);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("jsreconduit.refresh", refresh),
@@ -110,7 +212,10 @@ export function activate(context: vscode.ExtensionContext): void {
         preferDeobfuscated: true,
         signaturePath: getSignaturePath(),
       });
-      provider.update(store.snapshot());
+      updateProviders();
+      lastRefresh = new Date().toLocaleString();
+      statusItem.text = `$(radio-tower) JSReconduit: ${formatBaseLabel(baseDir)}`;
+      statusItem.tooltip = `Base dir: ${baseDir}\nLast refresh: ${lastRefresh}`;
       vscode.window.showInformationMessage("JSReconduit: deobfuscated outputs refreshed.");
     }),
     vscode.commands.registerCommand("jsreconduit.openLocation", async (filePath: string, line = 1, column = 1) => {
@@ -250,13 +355,35 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await vscode.commands.executeCommand("jsreconduit.openLocation", pickedAsset.asset.analysisPath, 1, 1);
+    }),
+    vscode.commands.registerCommand("jsreconduit.copyUrl", async (item?: TreeNode | string) => {
+      const url = getUrlFromItem(item);
+      if (!url) {
+        vscode.window.showWarningMessage("JSReconduit: no URL available for this item.");
+        return;
+      }
+      await vscode.env.clipboard.writeText(url);
+      vscode.window.showInformationMessage("JSReconduit: URL copied to clipboard.");
+    }),
+    vscode.commands.registerCommand("jsreconduit.copyPath", async (item?: TreeNode | string) => {
+      const filePath = getPathFromItem(item);
+      if (!filePath) {
+        vscode.window.showWarningMessage("JSReconduit: no file path available for this item.");
+        return;
+      }
+      await vscode.env.clipboard.writeText(filePath);
+      vscode.window.showInformationMessage("JSReconduit: file path copied to clipboard.");
     })
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("jsreconduit.baseDir")) {
-        watcher.updateBaseDir(getBaseDir());
+        const baseDir = getBaseDir();
+        watcher.updateBaseDir(baseDir);
+        statusItem.text = `$(radio-tower) JSReconduit: ${formatBaseLabel(baseDir)}`;
+        statusItem.tooltip = `Base dir: ${baseDir}\nLast refresh: ${lastRefresh}`;
+        refresh();
       }
       if (
         event.affectsConfiguration("jsreconduit.wordlistPath") ||
