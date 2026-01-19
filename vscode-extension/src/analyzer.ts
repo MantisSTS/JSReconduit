@@ -337,7 +337,10 @@ function isMimeType(value: string): boolean {
   if (!value || value.length > 80 || value.indexOf("/") === -1) {
     return false;
   }
-  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(value);
+  if (value.startsWith("./") || value.startsWith("../") || value.startsWith("/")) {
+    return false;
+  }
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(value);
 }
 
 function detectGraphQL(value: string): { type: string; label: string } | null {
@@ -361,6 +364,9 @@ function looksLikeData(value: string): boolean {
   if (!value || value.length < 4 || value.length > 80) {
     return false;
   }
+  if (looksLikeCssSelector(value)) {
+    return false;
+  }
   if (!/^[A-Za-z0-9 _:.\\-]+$/.test(value)) {
     return false;
   }
@@ -368,6 +374,31 @@ function looksLikeData(value: string): boolean {
     return false;
   }
   return true;
+}
+
+function looksLikeCssSelector(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (
+    trimmed.startsWith(".") ||
+    trimmed.startsWith("#") ||
+    trimmed.startsWith("[") ||
+    trimmed.startsWith(":")
+  ) {
+    return true;
+  }
+  if (/\[[^\]]+\]/.test(trimmed)) {
+    return true;
+  }
+  if (/:([A-Za-z][A-Za-z0-9_-]*)/.test(trimmed)) {
+    return true;
+  }
+  if (/[.#][A-Za-z][A-Za-z0-9_-]*/.test(trimmed)) {
+    return true;
+  }
+  return false;
 }
 
 function looksLikeSchema(node: any): boolean {
