@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -26,14 +27,28 @@ import {
   CallGraphEdge,
   FlowTrace,
   HtmlAsset,
+  SourcemapResult,
 } from "./types";
 import { logError, log, normalizePath } from "./utils";
+
+type CachedAnalysis = {
+  analysis: AssetAnalysis["analysis"];
+  analysisPath: string;
+  sourcemap?: SourcemapResult;
+};
+
+function hashString(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
 
 export class JSReconduitStore {
   private output: vscode.OutputChannel;
   private loader: IndexLoader;
   private assets: AssetAnalysis[] = [];
   private htmlAssets: HtmlAsset[] = [];
+  private analysisCache = new Map<string, CachedAnalysis>();
+  private cacheBaseDir: string | null = null;
+  private cacheSignatureKey: string | null = null;
 
   constructor(output: vscode.OutputChannel) {
     this.output = output;
@@ -59,8 +74,12 @@ export class JSReconduitStore {
     const signatureRules = await loadSignatureRules(baseDir, signaturePath, (message, error) =>
       logError(this.output, message, error)
     );
+    const signatureKey = this.buildSignatureKey(signatureRules);
+    this.resetCacheIfNeeded(baseDir, signatureKey);
 
     const htmlRefMap = this.buildHtmlRefMap(htmlAssets);
+    const usedCacheKeys = new Set<string>();
+    let cacheHits = 0;
     for (const entry of entries) {
       const assetType = entry.asset_type || "js";
       if (assetType == "html") {
@@ -78,10 +97,39 @@ export class JSReconduitStore {
         results.push(asset);
         continue;
       }
-      const analysisPath = this.pickAnalysisPath(entry, baseDir, preferDeobfuscated);
+      let analysisPath = this.pickAnalysisPath(entry, baseDir, preferDeobfuscated);
       if (!analysisPath) {
         continue;
       }
+      const deobPath = autoDeobfuscate ? this.getDeobfuscatedPath(entry, baseDir) : null;
+      const normalizedDeobPath = deobPath ? normalizePath(deobPath) : null;
+      const deobExists = normalizedDeobPath ? fs.existsSync(normalizedDeobPath) : false;
+      if (autoDeobfuscate && normalizedDeobPath && deobExists) {
+        analysisPath = normalizedDeobPath;
+      }
+      analysisPath = normalizePath(analysisPath);
+      if (!fs.existsSync(analysisPath)) {
+        continue;
+      }
+      const analysisKey = this.buildAnalysisKey(entry, analysisPath, signatureKey);
+      const allowCache = !forceDeobfuscate;
+      if (allowCache) {
+        const cached = this.analysisCache.get(analysisKey);
+        if (cached) {
+          const asset: AssetAnalysis = {
+            asset: entry,
+            analysis: cached.analysis,
+            analysisPath,
+            htmlReferrers: htmlRefMap.get(entry.url) || [],
+            sourcemap: cached.sourcemap,
+          };
+          results.push(asset);
+          usedCacheKeys.add(analysisKey);
+          cacheHits += 1;
+          continue;
+        }
+      }
+
       const sourceContents = await fs.promises.readFile(analysisPath, "utf8").catch(() => null);
       if (!sourceContents) {
         continue;
@@ -89,7 +137,7 @@ export class JSReconduitStore {
       let analysisContents = sourceContents;
       let analysisFilePath = analysisPath;
 
-      if (autoDeobfuscate) {
+      if (autoDeobfuscate && (!deobExists || forceDeobfuscate)) {
         const deob = await deobfuscateAndWrite(
           analysisContents,
           baseDir,
@@ -100,7 +148,7 @@ export class JSReconduitStore {
         );
         if (deob) {
           analysisContents = deob.code;
-          analysisFilePath = deob.path;
+          analysisFilePath = normalizePath(deob.path);
         }
       }
 
@@ -123,6 +171,13 @@ export class JSReconduitStore {
         asset.sourcemap = sourcemap;
       }
 
+      const finalKey = this.buildAnalysisKey(entry, analysisFilePath, signatureKey);
+      this.analysisCache.set(finalKey, {
+        analysis,
+        analysisPath: analysisFilePath,
+        sourcemap: asset.sourcemap,
+      });
+      usedCacheKeys.add(finalKey);
       results.push(asset);
     }
 
@@ -131,7 +186,12 @@ export class JSReconduitStore {
     await writeInterestingOutputs(baseDir, this.snapshot()).catch((error) =>
       logError(this.output, "Failed to write interesting outputs", error)
     );
-    log(this.output, `JSReconduit: Loaded ${results.length} assets.`);
+    this.pruneCache(usedCacheKeys);
+    if (cacheHits > 0) {
+      log(this.output, `JSReconduit: Loaded ${results.length} assets (${cacheHits} cached).`);
+    } else {
+      log(this.output, `JSReconduit: Loaded ${results.length} assets.`);
+    }
   }
 
   snapshot(): StoreSnapshot {
@@ -163,6 +223,8 @@ export class JSReconduitStore {
     const urls: Finding[] = [];
     const paths: Finding[] = [];
     const sourcemaps: { asset: AssetAnalysis; files: string[] }[] = [];
+    const jwts: Finding[] = [];
+    const authGuards: Finding[] = [];
     const wordlist = new Set<string>();
     const callGraph: CallGraphEdge[] = [];
     const traces: FlowTrace[] = [];
@@ -176,6 +238,8 @@ export class JSReconduitStore {
       urls.push(...asset.analysis.urls);
       paths.push(...asset.analysis.paths);
       secrets.push(...asset.analysis.secrets);
+      jwts.push(...asset.analysis.jwts);
+      authGuards.push(...asset.analysis.authGuards);
       signatures.push(...asset.analysis.signatures);
       featureFlags.push(...asset.analysis.featureFlags);
       data.push(...asset.analysis.data);
@@ -241,6 +305,8 @@ export class JSReconduitStore {
       urls,
       paths,
       secrets,
+      jwts,
+      authGuards,
       signatures,
       routes,
       drift,
@@ -272,6 +338,32 @@ export class JSReconduitStore {
       return raw;
     }
     return null;
+  }
+
+  private buildSignatureKey(signatureRules: SignatureRule[]): string {
+    return hashString(JSON.stringify(signatureRules));
+  }
+
+  private buildAnalysisKey(entry: AssetIndexEntry, analysisPath: string, signatureKey: string): string {
+    const assetType = entry.asset_type || "js";
+    const sha = entry.sha256 || "unknown";
+    return `${assetType}:${sha}:${analysisPath}:${signatureKey}`;
+  }
+
+  private resetCacheIfNeeded(baseDir: string, signatureKey: string): void {
+    if (this.cacheBaseDir !== baseDir || this.cacheSignatureKey !== signatureKey) {
+      this.analysisCache.clear();
+    }
+    this.cacheBaseDir = baseDir;
+    this.cacheSignatureKey = signatureKey;
+  }
+
+  private pruneCache(usedKeys: Set<string>): void {
+    for (const key of this.analysisCache.keys()) {
+      if (!usedKeys.has(key)) {
+        this.analysisCache.delete(key);
+      }
+    }
   }
 
   private getDeobfuscatedPath(entry: AssetIndexEntry, baseDir: string): string | null {
@@ -486,6 +578,8 @@ export class JSReconduitStore {
       urls: [],
       paths: [],
       secrets: [],
+      jwts: [],
+      authGuards: [],
       signatures: [],
       wordlist: new Set<string>(),
       callGraph: [],

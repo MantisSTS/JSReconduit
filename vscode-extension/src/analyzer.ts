@@ -149,6 +149,52 @@ const FEATURE_CONTAINER_KEYS = new Set([
   "variants",
   "rollouts",
 ]);
+const PRIVILEGE_GUARD_KEYWORDS = [
+  "admin",
+  "superuser",
+  "super",
+  "root",
+  "priv",
+  "power",
+  "staff",
+  "internal",
+  "owner",
+  "sudo",
+  "elevat",
+];
+const SENSITIVE_CALL_KEYWORDS = [
+  "delete",
+  "remove",
+  "destroy",
+  "ban",
+  "unlock",
+  "grant",
+  "revoke",
+  "impersonate",
+  "elevat",
+  "billing",
+  "charge",
+  "refund",
+  "override",
+  "promote",
+  "downgrade",
+];
+const SENSITIVE_CALL_SOFT_KEYWORDS = ["disable", "enable", "reset", "export"];
+const SENSITIVE_CALL_TARGET_KEYWORDS = [
+  "user",
+  "account",
+  "org",
+  "tenant",
+  "team",
+  "role",
+  "permission",
+  "access",
+  "token",
+  "key",
+  "credential",
+  "billing",
+  "invoice",
+];
 
 function truncateValue(value: string, max = 120): string {
   if (value.length <= max) {
@@ -232,7 +278,8 @@ function buildSignatureFindings(
   for (const rule of rules) {
     let regex: RegExp | null = null;
     try {
-      regex = new RegExp(rule.pattern, rule.flags || "i");
+      const flags = rule.flags === undefined ? "i" : rule.flags;
+      regex = new RegExp(rule.pattern, flags);
     } catch {
       continue;
     }
@@ -446,6 +493,33 @@ function isJwt(value: string): boolean {
   return true;
 }
 
+function extractJwtTokens(value: string): string[] {
+  if (!value) {
+    return [];
+  }
+  const matches = value.match(/[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/g);
+  if (!matches) {
+    return [];
+  }
+  const tokens = new Set<string>();
+  for (const candidate of matches) {
+    if (isJwt(candidate)) {
+      tokens.add(candidate);
+    }
+  }
+  return Array.from(tokens);
+}
+
+function addJwtFindings(result: AnalysisResult, value: string, filePath: string, node: any): void {
+  const tokens = extractJwtTokens(value);
+  if (tokens.length === 0) {
+    return;
+  }
+  for (const token of tokens) {
+    result.jwts.push(buildFinding("jwt", truncateValue(token), filePath, node, token));
+  }
+}
+
 function isUuid(value: string): boolean {
   return /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(
     value
@@ -525,6 +599,65 @@ function looksSensitiveLiteral(value: string): boolean {
     return false;
   }
   return true;
+}
+
+function extractGuardName(node: any): string | null {
+  if (!node) {
+    return null;
+  }
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+  if (node.type === "MemberExpression") {
+    return getMemberPath(node);
+  }
+  if (node.type === "UnaryExpression" && node.operator === "!") {
+    return extractGuardName(node.argument);
+  }
+  return null;
+}
+
+function looksLikePrivilegeGuard(name: string): boolean {
+  const lower = name.toLowerCase();
+  return PRIVILEGE_GUARD_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
+function looksSensitiveCall(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (SENSITIVE_CALL_KEYWORDS.some((keyword) => lower.includes(keyword))) {
+    return true;
+  }
+  if (!SENSITIVE_CALL_SOFT_KEYWORDS.some((keyword) => lower.includes(keyword))) {
+    return false;
+  }
+  return SENSITIVE_CALL_TARGET_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
+function collectSensitiveCalls(node: any): Array<{ name: string; node: any }> {
+  const calls: Array<{ name: string; node: any }> = [];
+  walk.simple(
+    node,
+    {
+      CallExpression(callNode: any) {
+        const calleeName = getCalleeName(callNode.callee);
+        if (calleeName && looksSensitiveCall(calleeName)) {
+          calls.push({ name: calleeName, node: callNode });
+        }
+      },
+    },
+    Object.assign({}, walk.base, {
+      FunctionDeclaration() {
+        // Skip nested functions for higher signal.
+      },
+      FunctionExpression() {
+        // Skip nested functions for higher signal.
+      },
+      ArrowFunctionExpression() {
+        // Skip nested functions for higher signal.
+      },
+    })
+  );
+  return calls;
 }
 
 function getMemberPath(node: any): string | null {
@@ -1266,6 +1399,8 @@ export function analyzeJavaScript(
     urls: [],
     paths: [],
     secrets: [],
+    jwts: [],
+    authGuards: [],
     signatures: [],
     wordlist: new Set<string>(),
     callGraph: [],
@@ -1382,6 +1517,7 @@ export function analyzeJavaScript(
             result.data.push(buildFinding("data", truncateValue(value), filePath, node));
           }
         }
+        addJwtFindings(result, value, filePath, node);
         if (signatureRules.length > 0) {
           result.signatures.push(...buildSignatureFindings(value, filePath, node, signatureRules));
         }
@@ -1442,6 +1578,7 @@ export function analyzeJavaScript(
                 result.data.push(buildFinding("data", truncateValue(value), filePath, quasi));
               }
             }
+            addJwtFindings(result, value, filePath, quasi);
             if (signatureRules.length > 0) {
               result.signatures.push(...buildSignatureFindings(value, filePath, quasi, signatureRules));
             }
@@ -1784,6 +1921,20 @@ export function analyzeJavaScript(
             result.secrets.push(buildFinding("secret", `${truncateValue(literal)} (assign-context)`, filePath, node, literal));
           }
         }
+      }
+    },
+    IfStatement(node: any) {
+      const guardName = extractGuardName(node.test);
+      if (!guardName || !looksLikePrivilegeGuard(guardName)) {
+        return;
+      }
+      const calls = collectSensitiveCalls(node.consequent);
+      if (calls.length === 0) {
+        return;
+      }
+      for (const call of calls) {
+        const label = `${call.name} (guarded by ${guardName})`;
+        result.authGuards.push(buildFinding("auth_guard", label, filePath, call.node, guardName));
       }
     },
     Property(node: any) {

@@ -1005,7 +1005,22 @@ class BurpExtender(IBurpExtender, IHttpListener, ITab):
                     json.dump(data, handle, indent=2, sort_keys=True)
                 else:
                     json.dump(data, handle)
-            os.rename(tmp_path, self.index_path)
+            try:
+                os.rename(tmp_path, self.index_path)
+            except Exception:
+                # Jython's rename can fail when the destination exists; fall back to replace.
+                try:
+                    if os.path.exists(self.index_path):
+                        os.remove(self.index_path)
+                    os.rename(tmp_path, self.index_path)
+                except Exception:
+                    with open(self.index_path, "w") as handle:
+                        if self.pretty_index:
+                            json.dump(data, handle, indent=2, sort_keys=True)
+                        else:
+                            json.dump(data, handle)
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
         except Exception as exc:
             self._log("JSReconduit index write error: %s" % str(exc), is_error=True)
             self._log(traceback.format_exc(), is_error=True)

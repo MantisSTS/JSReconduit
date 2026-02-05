@@ -25,6 +25,8 @@ export type FindingKind =
   | "url"
   | "path"
   | "secret"
+  | "jwt"
+  | "auth_guard"
   | "signature"
   | "sourcemap";
 
@@ -103,6 +105,8 @@ export interface AnalysisResult {
   urls: Finding[];
   paths: Finding[];
   secrets: Finding[];
+  jwts: Finding[];
+  authGuards: Finding[];
   signatures: Finding[];
   wordlist: Set<string>;
   callGraph: CallGraphEdge[];
@@ -158,6 +162,8 @@ export interface StoreSnapshot {
   urls: Finding[];
   paths: Finding[];
   secrets: Finding[];
+  jwts: Finding[];
+  authGuards: Finding[];
   signatures: Finding[];
   routes: RouteEntry[];
   drift: DriftEntry[];

@@ -113,6 +113,11 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
     { name: "storage", values: unique(snapshot.storage.map((finding) => finding.label)), findings: snapshot.storage },
     { name: "cookies", values: unique(snapshot.cookies.map((finding) => finding.label)), findings: snapshot.cookies },
     {
+      name: "jwts",
+      values: unique(snapshot.jwts.map((finding) => finding.detail || finding.label)),
+      findings: snapshot.jwts,
+    },
+    {
       name: "document-domain",
       values: unique(snapshot.documentDomain.map((finding) => finding.label)),
       findings: snapshot.documentDomain,
@@ -156,6 +161,11 @@ export async function writeInterestingOutputs(baseDir: string, snapshot: StoreSn
       name: "feature-flags",
       values: unique(snapshot.featureFlags.map((finding) => finding.label)),
       findings: snapshot.featureFlags,
+    },
+    {
+      name: "auth-guards",
+      values: unique(snapshot.authGuards.map((finding) => finding.label)),
+      findings: snapshot.authGuards,
     },
   ];
 

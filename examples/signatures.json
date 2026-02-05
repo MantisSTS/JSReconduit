@@ -4,13 +4,14 @@
       "id": "jwt",
       "kind": "secret",
       "label": "JWT Token",
-      "pattern": "eyJ[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+"
+      "pattern": "(?:^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])",
+      "flags": ""
     },
     {
       "id": "graphql-endpoint",
       "kind": "endpoint",
       "label": "GraphQL Endpoint",
-      "pattern": "/graphql",
+      "pattern": "(?:^|[/?#])graphql(?:[/?#]|$)",
       "flags": "i"
     }
   ]

@@ -110,6 +110,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       location: this.snapshot.location.length,
       storage: this.snapshot.storage.length,
       cookies: this.snapshot.cookies.length,
+      jwts: this.snapshot.jwts.length,
       documentDomain: this.snapshot.documentDomain.length,
       windowName: this.snapshot.windowName.length,
       windowOpen: this.snapshot.windowOpen.length,
@@ -123,6 +124,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
       sinks: this.snapshot.sinks.length,
       userSinks: this.snapshot.userSinks.length,
       secrets: this.snapshot.secrets.length,
+      authGuards: this.snapshot.authGuards.length,
       signatures: this.snapshot.signatures.length,
       frameworks: this.snapshot.frameworks.length,
       clusters: this.snapshot.clusters.length,
@@ -158,6 +160,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           { type: "root", id: "user-sinks", label: `User Sinks (${counts.userSinks})` },
           { type: "root", id: "sinks", label: `Sinks (${counts.sinks})` },
           { type: "root", id: "secrets", label: `Secrets (${counts.secrets})` },
+          { type: "root", id: "auth-guards", label: `Auth Guards (${counts.authGuards})` },
           { type: "root", id: "signatures", label: `Signatures (${counts.signatures})` },
           { type: "root", id: "frameworks", label: `Frameworks (${counts.frameworks})` },
           { type: "root", id: "traces", label: `Traces (${counts.traces})` },
@@ -183,6 +186,7 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           { type: "root", id: "location", label: `Location (${counts.location})` },
           { type: "root", id: "storage", label: `Storage (${counts.storage})` },
           { type: "root", id: "cookies", label: `Cookies (${counts.cookies})` },
+          { type: "root", id: "jwts", label: `JWTs (${counts.jwts})` },
           { type: "root", id: "document-domain", label: `Document Domain (${counts.documentDomain})` },
           { type: "root", id: "window-name", label: `Window Name (${counts.windowName})` },
           { type: "root", id: "window-open", label: `Window Open (${counts.windowOpen})` },
@@ -576,6 +580,10 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           return Promise.resolve(
             this.sortFindings(this.snapshot.cookies).map((finding) => ({ type: "finding", finding }))
           );
+        case "jwts":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.jwts).map((finding) => ({ type: "finding", finding }))
+          );
         case "document-domain":
           return Promise.resolve(
             this.sortFindings(this.snapshot.documentDomain).map((finding) => ({ type: "finding", finding }))
@@ -620,6 +628,10 @@ export class JSReconduitTreeProvider implements vscode.TreeDataProvider<TreeNode
           return Promise.resolve(this.sortFindings(this.snapshot.userSinks).map((finding) => ({ type: "finding", finding })));
         case "secrets":
           return Promise.resolve(this.sortFindings(this.snapshot.secrets).map((finding) => ({ type: "finding", finding })));
+        case "auth-guards":
+          return Promise.resolve(
+            this.sortFindings(this.snapshot.authGuards).map((finding) => ({ type: "finding", finding }))
+          );
         case "signatures":
           return Promise.resolve(this.sortFindings(this.snapshot.signatures).map((finding) => ({ type: "finding", finding })));
         case "frameworks":

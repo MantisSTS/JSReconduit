@@ -58,6 +58,8 @@ function flattenFindings(snapshot: StoreSnapshot): Array<{
   pushFindings("sink", snapshot.sinks);
   pushFindings("user_sink", snapshot.userSinks);
   pushFindings("secret", snapshot.secrets);
+  pushFindings("jwt", snapshot.jwts);
+  pushFindings("auth_guard", snapshot.authGuards);
   pushFindings("framework", snapshot.frameworks);
   pushFindings("signature", snapshot.signatures);
   return rows;
@@ -157,6 +159,8 @@ export async function exportFindings(
         sinks: snapshot.sinks,
         userSinks: snapshot.userSinks,
         secrets: snapshot.secrets,
+        jwts: snapshot.jwts,
+        authGuards: snapshot.authGuards,
         frameworks: snapshot.frameworks,
         signatures: snapshot.signatures,
       },

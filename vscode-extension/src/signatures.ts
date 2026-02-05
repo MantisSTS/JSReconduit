@@ -7,38 +7,42 @@ const DEFAULT_SIGNATURES: SignatureRule[] = [
     id: "aws-access-key",
     kind: "secret",
     label: "AWS Access Key",
-    pattern: "AKIA[0-9A-Z]{16}",
+    pattern: "(?:^|[^A-Za-z0-9])AKIA[0-9A-Z]{16}(?![A-Za-z0-9])",
+    flags: "",
   },
   {
     id: "stripe-secret",
     kind: "secret",
     label: "Stripe Secret Key",
-    pattern: "sk_live_[0-9a-zA-Z]{16,}",
+    pattern: "(?:^|[^A-Za-z0-9])sk_live_[0-9a-zA-Z]{24,}(?![A-Za-z0-9])",
+    flags: "",
   },
   {
     id: "github-token",
     kind: "secret",
     label: "GitHub Token",
-    pattern: "ghp_[0-9A-Za-z]{20,}",
+    pattern: "(?:^|[^A-Za-z0-9])ghp_[0-9A-Za-z]{36}(?![A-Za-z0-9])",
+    flags: "",
   },
   {
     id: "firebase-api-key",
     kind: "secret",
     label: "Firebase API Key",
-    pattern: "AIza[0-9A-Za-z\\-_]{20,}",
+    pattern: "(?:^|[^0-9A-Za-z_-])AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])",
+    flags: "",
   },
   {
     id: "graphql-endpoint",
     kind: "endpoint",
     label: "GraphQL Endpoint",
-    pattern: "/graphql",
+    pattern: "(?:^|[/?#])graphql(?:[/?#]|$)",
     flags: "i",
   },
   {
     id: "webhook-url",
     kind: "endpoint",
     label: "Webhook URL",
-    pattern: "webhook",
+    pattern: "(?:^|[^a-z0-9])webhooks?(?:$|[^a-z0-9])",
     flags: "i",
   },
 ];
@@ -83,4 +87,3 @@ export async function loadSignatureRules(
 
   return DEFAULT_SIGNATURES;
 }
-
